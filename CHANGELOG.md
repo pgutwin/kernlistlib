@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [n/a] 20 November 2025
+
+### Changed
+- Extensive update to add
+  - Builder function: API access for modifying existing parsed Verilog or building "from scratch"
+  - Validation function: API checks for completeness of internal representation of netlist
+  - Writer function: API to write out Verilog
+
 ## [n/a] 8 October 2025
 
 ### Fixed

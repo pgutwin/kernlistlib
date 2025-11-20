@@ -1,4 +1,6 @@
 #include "veriloglib.hpp"
+#include "verilog_builder.hpp"
+#include "verilog_writer.hpp"
 #include <gtest/gtest.h>
 
 using namespace verilog;
@@ -347,4 +349,546 @@ EXPECT_TRUE(is_slice_structural(u1.ports_pos[1], "bus", 7, 0));
     
     EXPECT_TRUE(is_slice(u1.ports_pos[1], "bus", 7, 0));
   }
+}
+
+// ============================================================================
+// Builder API Tests
+// ============================================================================
+
+TEST(Builder, NumberConstruction) {
+  using namespace verilog;
+  
+  // Simple integer
+  auto n1 = make_number(42);
+  EXPECT_EQ(n1.as_integer(), 42);
+  EXPECT_FALSE(n1.base.has_value());
+  
+  // Hex number
+  auto n2 = make_hex_number(8, "FF");
+  EXPECT_EQ(n2.length.value(), 8);
+  EXPECT_EQ(n2.base.value(), 'h');
+  EXPECT_EQ(n2.mantissa, "FF");
+  
+  // Binary number
+  auto n3 = make_bin_number(4, "1010");
+  EXPECT_EQ(n3.length.value(), 4);
+  EXPECT_EQ(n3.base.value(), 'b');
+  EXPECT_EQ(n3.mantissa, "1010");
+}
+
+TEST(Builder, RangeConstruction) {
+  using namespace verilog;
+  
+  auto r = make_range(7, 0);
+  EXPECT_EQ(r.start.as_integer(), 7);
+  EXPECT_EQ(r.end.as_integer(), 0);
+}
+
+TEST(Builder, IdentifierEscaping) {
+  using namespace verilog;
+  
+  EXPECT_FALSE(needs_escaping("valid_name"));
+  EXPECT_FALSE(needs_escaping("_underscore"));
+  EXPECT_FALSE(needs_escaping("name123"));
+  EXPECT_FALSE(needs_escaping("my$signal"));
+  
+  EXPECT_TRUE(needs_escaping("123invalid"));
+  EXPECT_TRUE(needs_escaping("my-signal"));
+  EXPECT_TRUE(needs_escaping("module"));
+  EXPECT_TRUE(needs_escaping("wire"));
+  
+  EXPECT_EQ(escape_identifier("valid"), "valid");
+  EXPECT_EQ(escape_identifier("123"), "\\123 ");
+  EXPECT_EQ(escape_identifier("my-signal"), "\\my-signal ");
+}
+
+TEST(Builder, ExpressionConstruction) {
+  using namespace verilog;
+  
+  // Simple identifier
+  auto e1 = make_identifier("signal");
+  ASSERT_TRUE(std::holds_alternative<Identifier>(e1));
+  EXPECT_EQ(std::get<Identifier>(e1).name, "signal");
+  
+  // Indexed
+  auto e2 = make_indexed("bus", 3);
+  ASSERT_TRUE(std::holds_alternative<IdentifierIndexed>(e2));
+  auto& ii = std::get<IdentifierIndexed>(e2);
+  EXPECT_EQ(ii.name, "bus");
+  EXPECT_EQ(ii.index.as_integer(), 3);
+  
+  // Sliced
+  auto e3 = make_sliced("data", 7, 0);
+  ASSERT_TRUE(std::holds_alternative<IdentifierSliced>(e3));
+  auto& is = std::get<IdentifierSliced>(e3);
+  EXPECT_EQ(is.name, "data");
+  EXPECT_EQ(is.range.start.as_integer(), 7);
+  EXPECT_EQ(is.range.end.as_integer(), 0);
+  
+  // Concatenation
+  auto e4 = make_concatenation({make_identifier("a"), make_identifier("b")});
+  ASSERT_TRUE(std::holds_alternative<std::shared_ptr<Concatenation>>(e4));
+  auto& concat = std::get<std::shared_ptr<Concatenation>>(e4);
+  EXPECT_EQ(concat->elements.size(), 2u);
+}
+
+TEST(Builder, ModuleConstruction) {
+  using namespace verilog;
+  
+  auto m = make_module("test_mod");
+  EXPECT_EQ(m.module_name, "test_mod");
+  EXPECT_TRUE(m.port_list.empty());
+  EXPECT_TRUE(m.input_declarations.empty());
+}
+
+TEST(Builder, AddDeclarations) {
+  using namespace verilog;
+  
+  Module m = make_module("top");
+  
+  // Add input without range
+  add_input(m, "clk");
+  EXPECT_EQ(m.input_declarations.size(), 1u);
+  EXPECT_EQ(m.input_declarations[0].net_name, "clk");
+  EXPECT_FALSE(m.input_declarations[0].range.has_value());
+  EXPECT_EQ(m.port_list.size(), 1u);
+  EXPECT_EQ(m.port_list[0], "clk");
+  
+  // Add output with range
+  add_output(m, "data", make_range(7, 0));
+  EXPECT_EQ(m.output_declarations.size(), 1u);
+  EXPECT_EQ(m.output_declarations[0].net_name, "data");
+  EXPECT_TRUE(m.output_declarations[0].range.has_value());
+  EXPECT_EQ(m.port_list.size(), 2u);
+  
+  // Add wire (not in port list)
+  add_wire(m, "internal");
+  EXPECT_EQ(m.net_declarations.size(), 1u);
+  EXPECT_EQ(m.port_list.size(), 2u); // Still 2, wire not added to port list
+  
+  // Try to add duplicate - should throw
+  EXPECT_THROW(add_input(m, "clk"), std::invalid_argument);
+}
+
+TEST(Builder, AddAssignmentAndInstance) {
+  using namespace verilog;
+  
+  Module m = make_module("top");
+  add_input(m, "a");
+  add_output(m, "b");
+  
+  // Add assignment
+  add_assignment(m, make_identifier("b"), make_identifier("a"));
+  EXPECT_EQ(m.assignments.size(), 1u);
+  EXPECT_EQ(m.assignments[0].assignments.size(), 1u);
+  
+  // Add instance
+  auto inst = make_instance("buffer", "u0", {make_identifier("a"), make_identifier("b")});
+  add_instance(m, inst);
+  EXPECT_EQ(m.module_instances.size(), 1u);
+  EXPECT_EQ(m.module_instances[0].instance_name, "u0");
+  
+  // Try to add duplicate instance
+  EXPECT_THROW(add_instance(m, inst), std::invalid_argument);
+}
+
+TEST(Builder, InstanceConstruction) {
+  using namespace verilog;
+  
+  // Positional
+  auto inst1 = make_instance("leaf", "u0", {make_identifier("a"), make_identifier("b")});
+  EXPECT_EQ(inst1.module_name, "leaf");
+  EXPECT_EQ(inst1.instance_name, "u0");
+  EXPECT_EQ(inst1.ports_pos.size(), 2u);
+  EXPECT_TRUE(inst1.ports_named.empty());
+  
+  // Named
+  auto inst2 = make_instance_named("leaf", "u1", {
+    {"x", make_identifier("a")},
+    {"y", make_identifier("b")}
+  });
+  EXPECT_EQ(inst2.module_name, "leaf");
+  EXPECT_EQ(inst2.instance_name, "u1");
+  EXPECT_TRUE(inst2.ports_pos.empty());
+  EXPECT_EQ(inst2.ports_named.size(), 2u);
+}
+
+TEST(Builder, RemoveOperations) {
+  using namespace verilog;
+  
+  Module m = make_module("top");
+  add_input(m, "a");
+  add_output(m, "b");
+  add_wire(m, "w");
+  
+  EXPECT_TRUE(remove_input(m, "a"));
+  EXPECT_EQ(m.input_declarations.size(), 0u);
+  EXPECT_FALSE(remove_input(m, "a")); // Already removed
+  
+  EXPECT_TRUE(remove_output(m, "b"));
+  EXPECT_EQ(m.output_declarations.size(), 0u);
+  
+  EXPECT_TRUE(remove_wire(m, "w"));
+  EXPECT_EQ(m.net_declarations.size(), 0u);
+}
+
+TEST(Builder, QueryFunctions) {
+  using namespace verilog;
+  
+  Module m = make_module("top");
+  add_input(m, "a");
+  add_output(m, "b");
+  add_wire(m, "w");
+  
+  EXPECT_TRUE(has_port(m, "a"));
+  EXPECT_TRUE(has_port(m, "b"));
+  EXPECT_FALSE(has_port(m, "w"));
+  
+  EXPECT_TRUE(has_wire(m, "w"));
+  EXPECT_FALSE(has_wire(m, "a"));
+  
+  EXPECT_TRUE(has_signal(m, "a"));
+  EXPECT_TRUE(has_signal(m, "b"));
+  EXPECT_TRUE(has_signal(m, "w"));
+  EXPECT_FALSE(has_signal(m, "x"));
+}
+
+TEST(Builder, NetlistOperations) {
+  using namespace verilog;
+  
+  Netlist nl;
+  Module m1 = make_module("mod1");
+  Module m2 = make_module("mod2");
+  
+  add_module(nl, m1);
+  EXPECT_EQ(nl.modules.size(), 1u);
+  
+  add_module(nl, m2);
+  EXPECT_EQ(nl.modules.size(), 2u);
+  
+  // Try to add duplicate
+  EXPECT_THROW(add_module(nl, m1), std::invalid_argument);
+  
+  // Find module
+  auto* found = find_module(nl, "mod1");
+  ASSERT_NE(found, nullptr);
+  EXPECT_EQ(found->module_name, "mod1");
+  
+  auto* not_found = find_module(nl, "nonexistent");
+  EXPECT_EQ(not_found, nullptr);
+}
+
+// ============================================================================
+// Writer API Tests
+// ============================================================================
+
+TEST(Writer, SimpleModule) {
+  using namespace verilog;
+  
+  Module m = make_module("simple");
+  add_input(m, "a");
+  add_output(m, "b");
+  
+  std::string verilog = write_module(m);
+  
+  EXPECT_NE(verilog.find("module simple"), std::string::npos);
+  EXPECT_NE(verilog.find("input a;"), std::string::npos);
+  EXPECT_NE(verilog.find("output b;"), std::string::npos);
+  EXPECT_NE(verilog.find("endmodule"), std::string::npos);
+}
+
+TEST(Writer, ModuleWithRanges) {
+  using namespace verilog;
+  
+  Module m = make_module("ranged");
+  add_input(m, "data_in", make_range(7, 0));
+  add_output(m, "data_out", make_range(15, 0));
+  
+  std::string verilog = write_module(m);
+  
+  EXPECT_NE(verilog.find("input [7:0] data_in"), std::string::npos);
+  EXPECT_NE(verilog.find("output [15:0] data_out"), std::string::npos);
+}
+
+TEST(Writer, ModuleWithAssignment) {
+  using namespace verilog;
+  
+  Module m = make_module("assign_test");
+  add_input(m, "a");
+  add_output(m, "b");
+  add_assignment(m, make_identifier("b"), make_identifier("a"));
+  
+  std::string verilog = write_module(m);
+  
+  EXPECT_NE(verilog.find("assign b = a;"), std::string::npos);
+}
+
+TEST(Writer, ModuleWithInstance) {
+  using namespace verilog;
+  
+  Module m = make_module("top");
+  add_input(m, "x");
+  add_output(m, "y");
+  
+  auto inst = make_instance_named("leaf", "u0", {
+    {"a", make_identifier("x")},
+    {"b", make_identifier("y")}
+  });
+  add_instance(m, inst);
+  
+  std::string verilog = write_module(m);
+  
+  EXPECT_NE(verilog.find("leaf u0"), std::string::npos);
+  EXPECT_NE(verilog.find(".a(x)"), std::string::npos);
+  EXPECT_NE(verilog.find(".b(y)"), std::string::npos);
+}
+
+TEST(Writer, ComplexExpressions) {
+  using namespace verilog;
+  
+  Module m = make_module("complex");
+  add_input(m, "bus", make_range(7, 0));
+  add_output(m, "bit_out");
+  add_output(m, "slice_out", make_range(3, 0));
+  
+  // Bit select
+  add_assignment(m, make_identifier("bit_out"), make_indexed("bus", 5));
+  
+  // Part select
+  add_assignment(m, make_identifier("slice_out"), make_sliced("bus", 3, 0));
+  
+  std::string verilog = write_module(m);
+  
+  EXPECT_NE(verilog.find("assign bit_out = bus[5];"), std::string::npos);
+  EXPECT_NE(verilog.find("assign slice_out = bus[3:0];"), std::string::npos);
+}
+
+TEST(Writer, NumberFormatting) {
+  using namespace verilog;
+  
+  // Simple number
+  auto n1 = make_number(42);
+  EXPECT_EQ(write_number(n1), "42");
+  
+  // Hex with size
+  auto n2 = make_hex_number(8, "FF");
+  EXPECT_EQ(write_number(n2), "8'hFF");
+  
+  // Binary with size
+  auto n3 = make_bin_number(4, "1010");
+  EXPECT_EQ(write_number(n3), "4'b1010");
+}
+
+TEST(Writer, RangeFormatting) {
+  using namespace verilog;
+  
+  auto r = make_range(7, 0);
+  EXPECT_EQ(write_range(r), "[7:0]");
+}
+
+TEST(Writer, ExpressionFormatting) {
+  using namespace verilog;
+  
+  EXPECT_EQ(write_expr(make_identifier("sig")), "sig");
+  EXPECT_EQ(write_expr(make_indexed("bus", 3)), "bus[3]");
+  EXPECT_EQ(write_expr(make_sliced("data", 7, 0)), "data[7:0]");
+  
+  auto concat = make_concatenation({make_identifier("a"), make_identifier("b")});
+  EXPECT_EQ(write_expr(concat), "{a, b}");
+}
+
+TEST(Writer, Netlist) {
+  using namespace verilog;
+  
+  Netlist nl;
+  
+  Module m1 = make_module("leaf");
+  add_input(m1, "x");
+  add_output(m1, "y");
+  
+  Module m2 = make_module("top");
+  add_input(m2, "a");
+  add_output(m2, "b");
+  auto inst = make_instance("leaf", "u0", {make_identifier("a"), make_identifier("b")});
+  add_instance(m2, inst);
+  
+  add_module(nl, m1);
+  add_module(nl, m2);
+  
+  std::string verilog = write_netlist(nl);
+  
+  EXPECT_NE(verilog.find("module leaf"), std::string::npos);
+  EXPECT_NE(verilog.find("module top"), std::string::npos);
+  EXPECT_NE(verilog.find("leaf u0"), std::string::npos);
+}
+
+TEST(Writer, WriterOptions) {
+  using namespace verilog;
+  
+  Module m = make_module("opts_test");
+  add_input(m, "a");
+  
+  WriterOptions opts;
+  opts.indent_size = 4;
+  
+  std::string verilog = write_module(m, opts);
+  
+  // Check that indentation is applied (4 spaces)
+  EXPECT_NE(verilog.find("    input a;"), std::string::npos);
+}
+
+// ============================================================================
+// Validation Tests
+// ============================================================================
+
+TEST(Validation, ValidModule) {
+  using namespace verilog;
+  
+  Module m = make_module("valid");
+  add_input(m, "a");
+  add_output(m, "b");
+  
+  auto errors = validate_module(m);
+  EXPECT_TRUE(errors.empty());
+}
+
+TEST(Validation, DuplicateSignalName) {
+  using namespace verilog;
+  
+  Module m = make_module("dup");
+  add_input(m, "signal");
+  
+  // Manually add duplicate (bypassing add_output which would throw)
+  OutputDeclaration out;
+  out.net_name = "signal";
+  m.output_declarations.push_back(out);
+  
+  auto errors = validate_module(m);
+  EXPECT_FALSE(errors.empty());
+  
+  bool found_dup_error = false;
+  for (const auto& err : errors) {
+    if (err.message.find("Duplicate") != std::string::npos) {
+      found_dup_error = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_dup_error);
+}
+
+TEST(Validation, UndeclaredSignalInAssignment) {
+  using namespace verilog;
+  
+  Module m = make_module("undeclared");
+  add_output(m, "b");
+  
+  // Reference undeclared signal 'a'
+  add_assignment(m, make_identifier("b"), make_identifier("a"));
+  
+  auto errors = validate_module(m);
+  EXPECT_FALSE(errors.empty());
+  
+  bool found_undeclared = false;
+  for (const auto& err : errors) {
+    if (err.message.find("undeclared") != std::string::npos) {
+      found_undeclared = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_undeclared);
+}
+
+TEST(Validation, NetlistDuplicateModuleName) {
+  using namespace verilog;
+  
+  Netlist nl;
+  Module m1 = make_module("dup_name");
+  Module m2 = make_module("dup_name");
+  
+  nl.modules.push_back(m1);
+  nl.modules.push_back(m2);
+  
+  auto errors = validate_netlist(nl);
+  EXPECT_FALSE(errors.empty());
+  
+  bool found_dup = false;
+  for (const auto& err : errors) {
+    if (err.message.find("Duplicate module") != std::string::npos) {
+      found_dup = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_dup);
+}
+
+TEST(Validation, ValidateBeforeWrite) {
+  using namespace verilog;
+  
+  Module m = make_module("invalid");
+  add_output(m, "b");
+  add_assignment(m, make_identifier("b"), make_identifier("undeclared"));
+  
+  WriterOptions opts;
+  opts.validate_before_write = true;
+  
+  EXPECT_THROW(write_module(m, opts), parse_error);
+}
+
+// ============================================================================
+// Round-trip Tests (Parse -> Modify -> Write -> Parse)
+// ============================================================================
+
+TEST(RoundTrip, ParseModifyWrite) {
+  using namespace verilog;
+  
+  std::string original = R"(
+module original(a, b);
+  input a;
+  output b;
+  assign b = a;
+endmodule
+)";
+  
+  // Parse
+  auto nl = parse_string(original);
+  ASSERT_EQ(nl.modules.size(), 1u);
+  
+  // Modify
+  Module& m = nl.modules[0];
+  add_wire(m, "internal");
+  
+  // Write
+  std::string modified = write_netlist(nl);
+  
+  // Parse again
+  auto nl2 = parse_string(modified);
+  ASSERT_EQ(nl2.modules.size(), 1u);
+  EXPECT_EQ(nl2.modules[0].net_declarations.size(), 1u);
+  EXPECT_EQ(nl2.modules[0].net_declarations[0].net_name, "internal");
+}
+
+TEST(RoundTrip, CreateWriteParse) {
+  using namespace verilog;
+  
+  // Create from scratch
+  Module m = make_module("created");
+  add_input(m, "clk");
+  add_input(m, "data", make_range(7, 0));
+  add_output(m, "result", make_range(7, 0));
+  add_wire(m, "temp", make_range(7, 0));
+  add_assignment(m, make_identifier("result"), make_identifier("data"));
+  
+  // Write
+  std::string verilog = write_module(m);
+  
+  // Parse
+  auto nl = parse_string(verilog);
+  ASSERT_EQ(nl.modules.size(), 1u);
+  
+  const auto& parsed = nl.modules[0];
+  EXPECT_EQ(parsed.module_name, "created");
+  EXPECT_EQ(parsed.input_declarations.size(), 2u);
+  EXPECT_EQ(parsed.output_declarations.size(), 1u);
+  EXPECT_EQ(parsed.net_declarations.size(), 1u);
+  EXPECT_EQ(parsed.assignments.size(), 1u);
 }

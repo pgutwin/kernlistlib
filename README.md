@@ -1,6 +1,6 @@
-# Verilog Parser (C++ / PEGTL)
+# Verilog Parser & Writer (C++ / PEGTL)
 
-This repository provides a lightweight Verilog parser implemented in C++20 using [PEGTL](https://github.com/taocpp/PEGTL) and tested with GoogleTest. It is aimed at **structural Verilog** use‑cases: module headers, declarations, continuous assignments, and simple module instantiations.
+This repository provides a lightweight Verilog parser and writer implemented in C++20 using [PEGTL](https://github.com/taocpp/PEGTL) and tested with GoogleTest. It is aimed at **structural Verilog** use‑cases: module headers, declarations, continuous assignments, and simple module instantiations.
 
 > **Scope note**: This is a focused subset — it is *not* a complete Verilog-2005 parser.
 
@@ -11,10 +11,17 @@ This repository provides a lightweight Verilog parser implemented in C++20 using
 - **Language**: C++20
 - **Parser**: PEGTL (Parsing Expression Grammar Template Library)
 - **Testing**: GoogleTest
+- **Capabilities**: 
+  - **Parse** Verilog files into C++ data structures
+  - **Create** Verilog modules programmatically
+  - **Modify** existing parsed structures
+  - **Write** data structures back to Verilog text
+  - **Validate** module and netlist structures
 - **Folders**:  
-  - `include/` – public API (`veriloglib.hpp`) and grammar/actions headers  
+  - `include/` – public API headers
   - `src/` – implementation and CLI (`vparse`)  
   - `tests/` – unit tests (GoogleTest)
+  - `doc/` – documentation and grammar specification
 
 Build & test:
 ```bash
@@ -30,30 +37,99 @@ CLI:
 
 ---
 
+## Quick Start Examples
+
+### Parse Verilog
+
+```cpp
+#include "veriloglib.hpp"
+
+using namespace verilog;
+
+Netlist nl = parse_file("design.v");
+for (const auto& module : nl.modules) {
+    std::cout << module.summary();
+}
+```
+
+### Create Verilog from Scratch
+
+```cpp
+#include "verilog_builder.hpp"
+#include "verilog_writer.hpp"
+
+using namespace verilog;
+
+Module m = make_module("buffer");
+add_input(m, "in", make_range(7, 0));
+add_output(m, "out", make_range(7, 0));
+add_assignment(m, make_identifier("out"), make_identifier("in"));
+
+std::string verilog = write_module(m);
+std::cout << verilog;
+```
+
+Output:
+```verilog
+module buffer(in, out);
+  input [7:0] in;
+
+  output [7:0] out;
+
+  assign out = in;
+endmodule
+```
+
+### Modify and Write
+
+```cpp
+#include "veriloglib.hpp"
+#include "verilog_builder.hpp"
+#include "verilog_writer.hpp"
+
+using namespace verilog;
+
+// Parse existing design
+Netlist nl = parse_file("design.v");
+Module& m = nl.modules[0];
+
+// Add debug signals
+add_wire(m, "debug_signal", make_range(3, 0));
+add_assignment(m, make_identifier("debug_signal"), make_sliced("bus", 3, 0));
+
+// Validate and write
+auto errors = validate_module(m);
+if (errors.empty()) {
+    std::cout << write_netlist(nl);
+}
+```
+
+---
+
 ## Public API
 
-Declared in `include/veriloglib.hpp`.
+### Parser API (veriloglib.hpp)
 
-### Data structures
+#### Data structures
 
 ```cpp
 struct Number {
-  std::optional<int>  length;     // optional size to the left of the base (e.g., 8'hFF) — parsed but not fully enforced
+  std::optional<int>  length;     // optional size to the left of the base (e.g., 8'hFF)
   std::optional<char> base;       // 'b'|'o'|'d'|'h' or std::nullopt
-  std::string         mantissa;   // digits as written (no underscores supported)
+  std::string         mantissa;   // digits as written
   int64_t as_integer() const;     // best-effort integer conversion
 };
 
 struct Range {                     // [msb:lsb]
   Number start;
   Number end;
-  std::vector<int64_t> to_indices() const; // msb..lsb (inclusive)
+  std::vector<int64_t> to_indices() const;
 };
 
 struct Identifier          { std::string name; };
 struct IdentifierIndexed   { std::string name; Number index; };                 // a[3]
 struct IdentifierSliced    { std::string name; Range range; };                  // a[7:0]
-struct Concatenation;                                                          // {a, b[1], c[3:0]}
+struct Concatenation;                                                           // {a, b[1], c[3:0]}
 using Expr = std::variant<Identifier, IdentifierIndexed, IdentifierSliced, std::shared_ptr<Concatenation>>;
 struct Concatenation { std::vector<Expr> elements; };
 
@@ -67,13 +143,13 @@ struct ContinuousAssign { std::vector<std::pair<Expr, Expr>> assignments; };
 struct ModuleInstance {
   std::string module_name;        // type, e.g., "leaf"
   std::string instance_name;      // e.g., "u0"
-  std::vector<Expr>         ports_pos;   // positional connections (if used)
-  std::map<std::string,Expr> ports_named; // named connections (if used)
+  std::vector<Expr>         ports_pos;   // positional connections
+  std::map<std::string,Expr> ports_named; // named connections
 };
 
 struct Module {
   std::string module_name;
-  std::vector<std::string> port_list;            // from the header's ( ... )
+  std::vector<std::string> port_list;
   std::vector<NetDeclaration>    net_declarations;
   std::vector<OutputDeclaration> output_declarations;
   std::vector<InputDeclaration>  input_declarations;
@@ -81,24 +157,121 @@ struct Module {
   std::vector<ModuleInstance>    module_instances;
   std::vector<ContinuousAssign>  assignments;
 
-  std::string summary() const; // human-readable dump
+  std::string summary() const;
 };
 
 struct Netlist { std::vector<Module> modules; };
 ```
 
-### Parse functions
+#### Parse functions
 
 ```cpp
 Netlist parse_string(std::string_view text);     // throws verilog::parse_error on failure
 Netlist parse_file(const std::string& path);     // throws verilog::parse_error on failure
 ```
 
+### Builder API (verilog_builder.hpp)
+
+#### Construction helpers
+
+```cpp
+// Numbers
+Number make_number(int64_t value);
+Number make_hex_number(int length, const std::string& hex_digits);
+Number make_bin_number(int length, const std::string& bin_digits);
+
+// Ranges
+Range make_range(int64_t msb, int64_t lsb);
+
+// Expressions (identifiers automatically escaped if needed)
+Expr make_identifier(const std::string& name);
+Expr make_indexed(const std::string& name, int64_t index);
+Expr make_sliced(const std::string& name, int64_t msb, int64_t lsb);
+Expr make_concatenation(const std::vector<Expr>& elements);
+
+// Module construction
+Module make_module(const std::string& name);
+```
+
+#### Modification functions
+
+```cpp
+// Add declarations (ports automatically added to port_list)
+void add_input(Module& m, const std::string& name, std::optional<Range> range = std::nullopt);
+void add_output(Module& m, const std::string& name, std::optional<Range> range = std::nullopt);
+void add_inout(Module& m, const std::string& name, std::optional<Range> range = std::nullopt);
+void add_wire(Module& m, const std::string& name, std::optional<Range> range = std::nullopt);
+
+// Add assignments and instances
+void add_assignment(Module& m, const Expr& lhs, const Expr& rhs);
+void add_instance(Module& m, const ModuleInstance& inst);
+
+// Create instances
+ModuleInstance make_instance(const std::string& module_name,
+                             const std::string& instance_name,
+                             const std::vector<Expr>& positional_ports = {});
+ModuleInstance make_instance_named(const std::string& module_name,
+                                   const std::string& instance_name,
+                                   const std::map<std::string, Expr>& named_ports);
+
+// Remove elements
+bool remove_input(Module& m, const std::string& name);
+bool remove_output(Module& m, const std::string& name);
+bool remove_wire(Module& m, const std::string& name);
+bool remove_instance(Module& m, const std::string& instance_name);
+
+// Query functions
+bool has_signal(const Module& m, const std::string& name);
+const ModuleInstance* find_instance(const Module& m, const std::string& instance_name);
+
+// Netlist operations
+void add_module(Netlist& nl, const Module& m);
+Module* find_module(Netlist& nl, const std::string& module_name);
+```
+
+### Writer API (verilog_writer.hpp)
+
+#### Writer options
+
+```cpp
+struct WriterOptions {
+    int indent_size = 2;                    // spaces per indent level
+    bool use_tabs = false;                  // use tabs instead of spaces
+    int max_port_list_length = 80;          // wrap port lists longer than this
+    bool one_declaration_per_line = true;   // split declarations to separate lines
+    bool validate_before_write = false;     // validate structure before writing
+};
+```
+
+#### Write functions
+
+```cpp
+std::string write_module(const Module& m, const WriterOptions& opts = {});
+std::string write_netlist(const Netlist& nl, const WriterOptions& opts = {});
+std::string write_number(const Number& n);
+std::string write_range(const Range& r);
+std::string write_expr(const Expr& e);
+```
+
+#### Validation
+
+```cpp
+struct ValidationError {
+    enum class Severity { ERROR, WARNING };
+    std::string message;
+    std::string location;
+    Severity severity;
+};
+
+std::vector<ValidationError> validate_module(const Module& m);
+std::vector<ValidationError> validate_netlist(const Netlist& nl);
+```
+
 ---
 
 ## Supported Verilog Syntax (Detailed)
 
-This section documents **exactly** what the parser accepts. For a formal grammar, see the downloadable BNF file linked below.
+This section documents **exactly** what the parser accepts. For a formal grammar, see `doc/verilog_subset.bnf`.
 
 ### Modules
 - Form:
@@ -172,8 +345,133 @@ This section documents **exactly** what the parser accepts. For a formal grammar
 
 ---
 
-## Formal Grammar (BNF)
+## Output Format
 
-A full BNF of the supported subset is provided as a separate file for tooling and reference:
+The writer produces consistently formatted Verilog with:
+- Configurable indentation (default: 2 spaces)
+- One declaration per line
+- Blank lines between declaration sections
+- Named port connections on separate lines
+- Ranges in `[msb:lsb]` format
+- Preserved number notation (base and size when available)
 
-**➡️ Download:** [verilog_subset.bnf](verilog_subset.bnf)
+Example output:
+```verilog
+module example(clk, data_in, data_out);
+  input clk;
+  input [7:0] data_in;
+
+  output [7:0] data_out;
+
+  wire [7:0] internal;
+
+  assign internal = data_in;
+  assign data_out = internal;
+
+  register_slice u0(
+    .clk(clk),
+    .data(internal),
+    .q(data_out)
+  );
+endmodule
+```
+
+---
+
+## Validation
+
+The validation API checks for:
+- **Errors** (will prevent code generation):
+  - Duplicate signal names
+  - Undeclared signal references
+  - Duplicate instance names
+  - Port list inconsistencies
+  - Duplicate module names
+- **Warnings** (informational):
+  - Mixed positional/named connections
+  - Undeclared module types
+  - Ports declared but not in port_list
+
+Example:
+```cpp
+auto errors = validate_module(m);
+for (const auto& err : errors) {
+    std::cerr << (err.severity == ValidationError::Severity::ERROR ? "ERROR" : "WARNING")
+              << " at " << err.location << ": " << err.message << "\n";
+}
+```
+
+---
+
+## Documentation
+
+- **API Reference**: See `doc/WRITER_API.md` for comprehensive API documentation with examples
+- **Grammar Specification**: See `doc/verilog_subset.bnf` for the formal BNF grammar
+- **Implementation Details**: See `IMPLEMENTATION_SUMMARY.md` for technical details
+
+---
+
+## Complete Example
+
+```cpp
+#include "verilog_builder.hpp"
+#include "verilog_writer.hpp"
+
+using namespace verilog;
+
+int main() {
+    // Create netlist
+    Netlist nl;
+    
+    // Create a register slice module
+    Module reg_slice = make_module("register_slice");
+    add_input(reg_slice, "clk");
+    add_input(reg_slice, "data_in", make_range(7, 0));
+    add_output(reg_slice, "data_out", make_range(7, 0));
+    add_module(nl, reg_slice);
+    
+    // Create top-level module
+    Module top = make_module("design_top");
+    add_input(top, "sys_clk");
+    add_input(top, "input_data", make_range(7, 0));
+    add_output(top, "output_data", make_range(7, 0));
+    add_wire(top, "stage1", make_range(7, 0));
+    
+    // Add instance
+    auto u0 = make_instance_named("register_slice", "stage1_reg", {
+        {"clk", make_identifier("sys_clk")},
+        {"data_in", make_identifier("input_data")},
+        {"data_out", make_identifier("stage1")}
+    });
+    add_instance(top, u0);
+    
+    // Final connection
+    add_assignment(top, make_identifier("output_data"), make_identifier("stage1"));
+    add_module(nl, top);
+    
+    // Validate
+    auto errors = validate_netlist(nl);
+    if (!errors.empty()) {
+        for (const auto& err : errors) {
+            std::cerr << err.message << "\n";
+        }
+        return 1;
+    }
+    
+    // Write output
+    std::cout << write_netlist(nl);
+    return 0;
+}
+```
+
+---
+
+## License
+
+[Your license here]
+
+---
+
+## Contributing
+
+[Your contributing guidelines here]
