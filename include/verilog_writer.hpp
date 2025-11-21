@@ -5,23 +5,23 @@
 
 namespace verilog {
 
-// ============================================================================
-// Writer Options
-// ============================================================================
+  // ============================================================================
+  // Writer Options
+  // ============================================================================
 
-struct WriterOptions {
+  struct WriterOptions {
     int indent_size = 2;                    // spaces per indent level
     bool use_tabs = false;                  // use tabs instead of spaces
     int max_port_list_length = 80;          // wrap port lists longer than this
     bool one_declaration_per_line = true;   // split "input a, b;" into separate lines
     bool validate_before_write = false;     // run validation before writing
-};
+  };
 
-// ============================================================================
-// Validation Errors
-// ============================================================================
+  // ============================================================================
+  // Validation Errors
+  // ============================================================================
 
-struct ValidationError {
+  struct ValidationError {
     enum class Severity { ERROR, WARNING };
     
     std::string message;
@@ -29,42 +29,42 @@ struct ValidationError {
     Severity severity;
     
     ValidationError(const std::string& msg, const std::string& loc, Severity sev = Severity::ERROR)
-        : message(msg), location(loc), severity(sev) {}
-};
+      : message(msg), location(loc), severity(sev) {}
+  };
 
-// ============================================================================
-// Validation API
-// ============================================================================
+  // ============================================================================
+  // Validation API
+  // ============================================================================
 
-// Validate module structure
-std::vector<ValidationError> validate_module(const Module& m);
+  // Validate module structure
+  std::vector<ValidationError> validate_module(const Module& m);
 
-// Validate entire netlist
-std::vector<ValidationError> validate_netlist(const Netlist& nl);
+  // Validate entire netlist
+  std::vector<ValidationError> validate_netlist(const Netlist& nl);
 
-// ============================================================================
-// Writer API
-// ============================================================================
+  // ============================================================================
+  // Writer API
+  // ============================================================================
 
-// Write module to string
-// Throws parse_error if structure is invalid (e.g., has sub_modules)
-// If opts.validate_before_write is true, throws on validation errors
-std::string write_module(const Module& m, const WriterOptions& opts = {});
+  // Write module to string
+  // Throws parse_error if structure is invalid (e.g., has sub_modules)
+  // If opts.validate_before_write is true, throws on validation errors
+  std::string write_module(const Module& m, const WriterOptions& opts = {});
 
-// Write entire netlist to string
-std::string write_netlist(const Netlist& nl, const WriterOptions& opts = {});
+  // Write entire netlist to string
+  std::string write_netlist(const Netlist& nl, const WriterOptions& opts = {});
 
-// Write individual components (for testing/debugging)
-std::string write_number(const Number& n);
-std::string write_range(const Range& r);
-std::string write_expr(const Expr& e);
+  // Write individual components (for testing/debugging)
+  std::string write_number(const Number& n);
+  std::string write_range(const Range& r);
+  std::string write_expr(const Expr& e);
 
-// ============================================================================
-// Internal Writer Class
-// ============================================================================
+  // ============================================================================
+  // Internal Writer Class
+  // ============================================================================
 
-class VerilogWriter {
-private:
+  class VerilogWriter {
+  private:
     WriterOptions opts_;
     std::ostringstream out_;
     int indent_level_;
@@ -80,7 +80,7 @@ private:
     
     void check_no_sub_modules(const Module& m);
     
-public:
+  public:
     explicit VerilogWriter(const WriterOptions& opts);
     std::string write(const Module& m);
     std::string write(const Netlist& nl);
@@ -90,6 +90,6 @@ public:
     std::string format_range(const Range& r);
     std::string format_expr(const Expr& e);
     std::string format_identifier(const std::string& name);
-};
+  };
 
 } // namespace verilog

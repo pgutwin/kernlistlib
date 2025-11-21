@@ -7,12 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Reformatted all the files with proper indentation.
 
 ### Added
 
 ### Removed
 
 ### Fixed
+- Fixed issue #1: input and output statements cannot handel comma seperated lists
 
 ## [n/a] 20 November 2025
 

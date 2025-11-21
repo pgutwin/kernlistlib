@@ -7,9 +7,9 @@ using namespace verilog;
 
 TEST(Parse, SimpleModule) {
   std::string data = R"(
-module top(a,b,c);
+module top(a,b,c,d);
   input a, b;
-  output c;
+  output c, d;
   wire w1;
   assign c = a;
 endmodule
@@ -18,9 +18,13 @@ endmodule
   ASSERT_EQ(nl.modules.size(), 1u);
   const auto& m = nl.modules[0];
   EXPECT_EQ(m.module_name, "top");
-  EXPECT_EQ(m.port_list.size(), 3u);
-  EXPECT_EQ(m.input_declarations.size(), 1u);
-  EXPECT_EQ(m.output_declarations.size(), 1u);
+  EXPECT_EQ(m.port_list.size(), 4u);
+  EXPECT_EQ(m.input_declarations.size(), 2u);
+  EXPECT_EQ(m.input_declarations[0].net_name, "a");
+  EXPECT_EQ(m.input_declarations[1].net_name, "b");
+  EXPECT_EQ(m.output_declarations.size(), 2u);
+  EXPECT_EQ(m.output_declarations[0].net_name, "c");
+  EXPECT_EQ(m.output_declarations[1].net_name, "d");
   EXPECT_EQ(m.net_declarations.size(), 1u);
   EXPECT_EQ(m.assignments.size(), 1u);
 }
