@@ -8,13 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Reformatted all the files with proper indentation.
+- **BREAKING**: `Expr` variant now includes `Number` as first alternative (#3)
+  - External code using `std::visit` on `Expr` must add `Number` case
+  - All internal code updated (writer, validator, tests)
 
 ### Added
+- Number literal support in expressions (#3)
+  - Numbers can now appear on RHS of assignments: `assign a = 2'hx;`
+  - Numbers in concatenations: `{8'h00, data, 2'hx}`
+  - Support for x/z don't-care values in based numbers
+- Also added new stand-alone verilog test cases in ```tests```
 
 ### Removed
 
 ### Fixed
 - Fixed issue #1: input and output statements cannot handel comma seperated lists
+- Parser failures on escaped identifiers (backslash-prefixed) (#3)
 
 ## [n/a] 20 November 2025
 
