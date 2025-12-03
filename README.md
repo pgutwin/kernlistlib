@@ -63,6 +63,10 @@ using namespace verilog;
 Module m = make_module("buffer");
 add_input(m, "in", make_range(7, 0));
 add_output(m, "out", make_range(7, 0));
+add_wire(m, "default_val", make_range(3, 0));
+
+// Assign with number literal (NEW: numbers can be RHS expressions)
+add_assignment(m, make_identifier("default_val"), make_hex_number(4, "x"));
 add_assignment(m, make_identifier("out"), make_identifier("in"));
 
 std::string verilog = write_module(m);
@@ -76,6 +80,9 @@ module buffer(in, out);
 
   output [7:0] out;
 
+  wire [3:0] default_val;
+
+  assign default_val = 4'hx;
   assign out = in;
 endmodule
 ```
@@ -130,7 +137,7 @@ struct Identifier          { std::string name; };
 struct IdentifierIndexed   { std::string name; Number index; };                 // a[3]
 struct IdentifierSliced    { std::string name; Range range; };                  // a[7:0]
 struct Concatenation;                                                           // {a, b[1], c[3:0]}
-using Expr = std::variant<Identifier, IdentifierIndexed, IdentifierSliced, std::shared_ptr<Concatenation>>;
+using Expr = std::variant<Number, Identifier, IdentifierIndexed, IdentifierSliced, std::shared_ptr<Concatenation>>;
 struct Concatenation { std::vector<Expr> elements; };
 
 struct NetDeclaration   { std::string net_name; std::optional<Range> range; };
@@ -313,26 +320,33 @@ This section documents **exactly** what the parser accepts. For a formal grammar
 
 ### Expressions (subset)
 - Allowed primary expressions:
+  - Number literal: `2'hx`, `8'hFF`, `123`, `'b1010` (see **Numbers** section)
   - Identifier: `a`
   - Bit-select: `a[<number>]`
   - Part-select: `a[<msb>:<lsb>]` (numeric bounds only)
-  - Concatenation: `{ expr , expr , ... }`
-- **Not supported**: unary/binary operators (`~ & | ^ + - * / % << >>`, comparisons, ternary, parentheses for grouping, numeric literals as standalone expressions).
+  - Concatenation: `{ expr , expr , ... }` (can contain numbers and identifiers)
+- **Not supported**: unary/binary operators (`~ & | ^ + - * / % << >>`, comparisons, ternary, parentheses for grouping).
 
 ### Identifiers
 - Normal identifiers: `[A-Za-z_][A-Za-z0-9_$]*`
 - Escaped identifiers (Verilog-2005 style): `\` followed by a run of non‑whitespace characters excluding `[]{}().,;=` (trailing whitespace ends the identifier).
 
 ### Numbers
-- Supported forms (subset):
-  - Unsized unsigned decimal-like *hex-digit* sequence: `[0-9A-Fa-f]+`
-  - Signed variant: `[+-][0-9A-Fa-f]+`
-  - Based numbers with optional size:  
-    - `<size>'<base><digits>` where
-      - `<size>` = `[0-9A-Fa-f]+` (parsed but not enforced),
-      - `<base>` = `b|B|o|O|d|D|h|H`,
-      - `<digits>` = `[0-9A-Fa-f]+` (no `_ x z ?` in this subset).
-- Numbers are permitted **only** in ranges and indices, not as standalone expressions on the RHS/LHS of assignments.
+- Supported forms:
+  - Decimal (plain): `123`, `456` (digits 0-9 only)
+  - Signed: `+123`, `-456`
+  - Sized with base: `8'hFF`, `2'b10`, `4'd15`
+    - Size: decimal digits (e.g., `8`)
+    - Base: `'b|'B|'o|'O|'d|'D|'h|'H`
+    - Digits: hex digits `[0-9A-Fa-fxzXZ]` (supports don't-care `x`/`z` values)
+  - Unsized with base: `'hFF`, `'b1010`, `'o777`
+- **x/z values**: Supported in based numbers (e.g., `2'hx`, `4'bzz0x`)
+- **Usage**: Numbers can appear in:
+  - Ranges: `wire [7:0] data;`
+  - Bit-selects: `signal[3]`
+  - Part-selects: `bus[15:8]`
+  - **Assignments**: `assign a = 2'hx;` (NEW)
+  - **Concatenations**: `{8'h00, data, 2'hx}` (NEW)
 
 ### Comments & whitespace
 - Line comments: `// ...` to end of line
@@ -341,7 +355,7 @@ This section documents **exactly** what the parser accepts. For a formal grammar
 - Whitespace/comments may appear between all tokens.
 
 ### Known limitations
-- No procedural blocks (`always`, `initial`), no parameters/defparams, no generate blocks, no attributes binding semantics, no operators in expressions, no numeric literals as standalone expressions, no multi-dimensional arrays, no tasks/functions, no time/scaling, no `assign` drive strengths/delays.
+- No procedural blocks (`always`, `initial`), no parameters/defparams, no generate blocks, no attributes binding semantics, no operators in expressions, no multi-dimensional arrays, no tasks/functions, no time/scaling, no `assign` drive strengths/delays.
 
 ---
 

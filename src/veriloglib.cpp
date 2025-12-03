@@ -48,6 +48,17 @@ namespace verilog {
 
   std::string expr_to_string(const Expr& e) {
     struct V {
+      std::string operator()(const Number& x) const { 
+        std::string s;
+        if (x.length.has_value() && x.base.has_value()) {
+          s = std::to_string(x.length.value()) + "'" + x.base.value() + x.mantissa;
+        } else if (x.base.has_value()) {
+          s = "'" + std::string(1, x.base.value()) + x.mantissa;
+        } else {
+          s = x.mantissa;
+        }
+        return s;
+      }
       std::string operator()(const Identifier& x) const { return x.name; }
       std::string operator()(const IdentifierIndexed& x) const { return x.name + "[" + std::to_string(x.index.as_integer()) + "]"; }
       // std::string operator()(const IdentifierSliced& x) const { return x.name + "[..]"; }

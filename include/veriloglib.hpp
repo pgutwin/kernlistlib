@@ -29,7 +29,7 @@ namespace verilog {
   struct IdentifierIndexed { std::string name; Number index; };
   struct IdentifierSliced { std::string name; Range range; };
   struct Concatenation;
-  using Expr = std::variant<Identifier, IdentifierIndexed, IdentifierSliced, std::shared_ptr<Concatenation>>;
+  using Expr = std::variant<Number, Identifier, IdentifierIndexed, IdentifierSliced, std::shared_ptr<Concatenation>>;
   struct Concatenation { std::vector<Expr> elements; };
 
   struct NetDeclaration {

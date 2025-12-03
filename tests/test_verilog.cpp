@@ -42,6 +42,140 @@ endmodule
   EXPECT_EQ(m.inout_declarations[0].net_name, "A");
 }
 
+TEST(Parse, EscapedNames) {
+  std::string data = R"(
+module top(a,\b_$123,c,d);
+  input a, \b_$123;
+  output c, d;
+endmodule
+)";
+  auto nl = parse_string(data);
+  ASSERT_EQ(nl.modules.size(), 1u);
+  const auto& m = nl.modules[0];
+  EXPECT_EQ(m.module_name, "top");
+  EXPECT_EQ(m.port_list.size(), 4u);
+  EXPECT_EQ(m.input_declarations.size(), 2u);
+  EXPECT_EQ(m.input_declarations[0].net_name, "a");
+  EXPECT_EQ(m.input_declarations[1].net_name, "b_$123");
+  EXPECT_EQ(m.output_declarations.size(), 2u);
+  EXPECT_EQ(m.output_declarations[0].net_name, "c");
+  EXPECT_EQ(m.output_declarations[1].net_name, "d");
+}
+
+// begin new stuff
+// Test cases for number literals and concatenations in assignments
+
+TEST(Parse, NumberWithXValue) {
+  std::string data = R"(
+module test1;
+  wire [1:0] a;
+  assign a = 2'hx;
+endmodule
+)";
+  auto nl = parse_string(data);
+  ASSERT_EQ(nl.modules.size(), 1u);
+  const auto& m = nl.modules[0];
+  EXPECT_EQ(m.module_name, "test1");
+  
+  // Check wire declaration
+  ASSERT_EQ(m.net_declarations.size(), 1u);
+  EXPECT_EQ(m.net_declarations[0].net_name, "a");
+  ASSERT_TRUE(m.net_declarations[0].range.has_value());
+  EXPECT_EQ(m.net_declarations[0].range.value().start.as_integer(), 1);
+  EXPECT_EQ(m.net_declarations[0].range.value().end.as_integer(), 0);
+  
+  // Check assignment: a = 2'hx
+  ASSERT_EQ(m.assignments.size(), 1u);
+  ASSERT_EQ(m.assignments[0].assignments.size(), 1u);
+  const auto& assign = m.assignments[0].assignments[0];
+  
+  // LHS should be identifier "a"
+  ASSERT_TRUE(std::holds_alternative<verilog::Identifier>(assign.first));
+  EXPECT_EQ(std::get<verilog::Identifier>(assign.first).name, "a");
+  
+  // RHS should be a number literal "2'hx"
+  ASSERT_TRUE(std::holds_alternative<verilog::Number>(assign.second));
+  // The exact value/representation depends on how your Number type stores it
+}
+
+TEST(Parse, ConcatenationOnRHS) {
+  std::string data = R"(
+module test2;
+  wire [3:0] a, b, c;
+  assign a = {b, c};
+endmodule
+)";
+  auto nl = parse_string(data);
+  ASSERT_EQ(nl.modules.size(), 1u);
+  const auto& m = nl.modules[0];
+  EXPECT_EQ(m.module_name, "test2");
+  
+  // Check wire declarations
+  ASSERT_EQ(m.net_declarations.size(), 3u);
+  EXPECT_EQ(m.net_declarations[0].net_name, "a");
+  EXPECT_EQ(m.net_declarations[1].net_name, "b");
+  EXPECT_EQ(m.net_declarations[2].net_name, "c");
+  
+  // Check assignment: a = {b, c}
+  ASSERT_EQ(m.assignments.size(), 1u);
+  ASSERT_EQ(m.assignments[0].assignments.size(), 1u);
+  const auto& assign = m.assignments[0].assignments[0];
+  
+  // LHS should be identifier "a"
+  ASSERT_TRUE(std::holds_alternative<verilog::Identifier>(assign.first));
+  EXPECT_EQ(std::get<verilog::Identifier>(assign.first).name, "a");
+  
+  // RHS should be a concatenation containing "b" and "c"
+  ASSERT_TRUE(std::holds_alternative<std::shared_ptr<verilog::Concatenation>>(assign.second));
+  const auto& concat_ptr = std::get<std::shared_ptr<verilog::Concatenation>>(assign.second);
+  ASSERT_NE(concat_ptr, nullptr);
+  ASSERT_EQ(concat_ptr->elements.size(), 2u);
+  ASSERT_TRUE(std::holds_alternative<verilog::Identifier>(concat_ptr->elements[0]));
+  EXPECT_EQ(std::get<verilog::Identifier>(concat_ptr->elements[0]).name, "b");
+  ASSERT_TRUE(std::holds_alternative<verilog::Identifier>(concat_ptr->elements[1]));
+  EXPECT_EQ(std::get<verilog::Identifier>(concat_ptr->elements[1]).name, "c");
+}
+
+TEST(Parse, NumbersInConcatenation) {
+  std::string data = R"(
+module test4;
+  wire [3:0] a;
+  assign a = {2'h0, 2'hx};
+endmodule
+)";
+  auto nl = parse_string(data);
+  ASSERT_EQ(nl.modules.size(), 1u);
+  const auto& m = nl.modules[0];
+  EXPECT_EQ(m.module_name, "test4");
+  
+  // Check wire declaration
+  ASSERT_EQ(m.net_declarations.size(), 1u);
+  EXPECT_EQ(m.net_declarations[0].net_name, "a");
+  ASSERT_TRUE(m.net_declarations[0].range.has_value());
+  EXPECT_EQ(m.net_declarations[0].range.value().start.as_integer(), 3);
+  EXPECT_EQ(m.net_declarations[0].range.value().end.as_integer(), 0);
+  
+  // Check assignment: a = {2'h0, 2'hx}
+  ASSERT_EQ(m.assignments.size(), 1u);
+  ASSERT_EQ(m.assignments[0].assignments.size(), 1u);
+  const auto& assign = m.assignments[0].assignments[0];
+  
+  // LHS should be identifier "a"
+  ASSERT_TRUE(std::holds_alternative<verilog::Identifier>(assign.first));
+  EXPECT_EQ(std::get<verilog::Identifier>(assign.first).name, "a");
+  
+  // RHS should be a concatenation containing two number literals
+  ASSERT_TRUE(std::holds_alternative<std::shared_ptr<verilog::Concatenation>>(assign.second));
+  const auto& concat_ptr = std::get<std::shared_ptr<verilog::Concatenation>>(assign.second);
+  ASSERT_NE(concat_ptr, nullptr);
+  ASSERT_EQ(concat_ptr->elements.size(), 2u);
+  ASSERT_TRUE(std::holds_alternative<verilog::Number>(concat_ptr->elements[0]));
+  ASSERT_TRUE(std::holds_alternative<verilog::Number>(concat_ptr->elements[1]));
+  // The exact values depend on how your Number type stores "2'h0" and "2'hx"
+}
+// End new stuff
+
+
 TEST(Parse, Comments) {
   std::string data = R"(
 module test(a,b);

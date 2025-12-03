@@ -169,6 +169,70 @@ namespace verilog {
 	  }
 	}
 
+	// Try to detect if this is a number literal
+	// Numbers can be: plain digits, sized ('2'hx), unsized ('hx), or signed (+/-123)
+	auto is_number = [&](const std::string& str) -> bool {
+	  if (str.empty()) return false;
+	  // Check for sized: digits'base...
+	  size_t tick = str.find('\'');
+	  if (tick != std::string::npos && tick > 0) {
+	    // Check if everything before tick is digits
+	    for (size_t i = 0; i < tick; ++i) {
+	      if (!std::isdigit((unsigned char)str[i])) return false;
+	    }
+	    return true;  // Sized number like "2'hx"
+	  }
+	  // Check for unsized: 'base...
+	  if (str[0] == '\'') return true;
+	  // Check for signed: +/- followed by digits
+	  if (str[0] == '+' || str[0] == '-') {
+	    if (str.size() > 1 && std::isdigit((unsigned char)str[1])) return true;
+	  }
+	  // Check for plain number: must contain at least one decimal digit (0-9)
+	  // This prevents treating identifiers like "a", "abc" as numbers
+	  bool has_digit = false;
+	  bool all_valid = true;
+	  for (char c : str) {
+	    if (std::isdigit((unsigned char)c)) {
+	      has_digit = true;
+	    } else if (!std::isxdigit((unsigned char)c) && c != 'x' && c != 'X' && c != 'z' && c != 'Z') {
+	      all_valid = false;
+	      break;
+	    }
+	  }
+	  return has_digit && all_valid && !str.empty();
+	};
+
+	if (is_number(s)) {
+	  Number num;
+	  size_t tick = s.find('\'');
+	  if (tick != std::string::npos && tick > 0) {
+	    // Sized number: "2'hx"
+	    num.length = std::stoi(s.substr(0, tick));
+	    if (tick + 1 < s.size()) {
+	      num.base = s[tick + 1];
+	      if (tick + 2 < s.size()) {
+		num.mantissa = s.substr(tick + 2);
+	      }
+	    }
+	  } else if (s[0] == '\'') {
+	    // Unsized number: "'hx"
+	    if (s.size() > 1) {
+	      num.base = s[1];
+	      if (s.size() > 2) {
+		num.mantissa = s.substr(2);
+	      }
+	    }
+	  } else if (s[0] == '+' || s[0] == '-') {
+	    // Signed number: "+123" or "-456"
+	    num.mantissa = s;
+	  } else {
+	    // Plain number: "123" or "abc" (hex)
+	    num.mantissa = s;
+	  }
+	  return num;
+	}
+
 	// bare identifier
 	return Identifier{ strip_backslash(s) };
       }
@@ -226,6 +290,78 @@ namespace verilog {
 
     template<typename Rule>
     struct action : tao::pegtl::nothing<Rule> {};
+
+    // ---------- Number parsing actions ----------
+    // Capture sized number: "2'hx" -> length=2, base='h', mantissa="x"
+    template<> struct action<verilog::grammar::sized_number> {
+      template<typename Input>
+      static void apply(const Input& in, State& st) {
+	std::string s = in.string();
+	size_t tick = s.find('\'');
+	st.number_len.reset();
+	st.number_base.reset();
+	st.number_mantissa.clear();
+	
+	if (tick != std::string::npos && tick > 0) {
+	  st.number_len = std::stoi(s.substr(0, tick));
+	  if (tick + 1 < s.size()) {
+	    st.number_base = s[tick + 1];
+	    if (tick + 2 < s.size()) {
+	      st.number_mantissa = s.substr(tick + 2);
+	    }
+	  }
+	}
+      }
+    };
+
+    // Capture unsized number: "'hx" -> base='h', mantissa="x"
+    template<> struct action<verilog::grammar::unsized_number> {
+      template<typename Input>
+      static void apply(const Input& in, State& st) {
+	std::string s = in.string();
+	st.number_len.reset();
+	st.number_base.reset();
+	st.number_mantissa.clear();
+	
+	if (s.size() > 1 && s[0] == '\'') {
+	  st.number_base = s[1];
+	  if (s.size() > 2) {
+	    st.number_mantissa = s.substr(2);
+	  }
+	}
+      }
+    };
+
+    // Capture signed/plain number: just mantissa
+    template<> struct action<verilog::grammar::signed_number> {
+      template<typename Input>
+      static void apply(const Input& in, State& st) {
+	st.number_len.reset();
+	st.number_base.reset();
+	st.number_mantissa = in.string();
+      }
+    };
+
+    template<> struct action<verilog::grammar::plain_number> {
+      template<typename Input>
+      static void apply(const Input& in, State& st) {
+	st.number_len.reset();
+	st.number_base.reset();
+	st.number_mantissa = in.string();
+      }
+    };
+
+    // Number components saved by sized_number/unsized_number/etc but not used
+    // Expression action will parse numbers via make_expr_from_text instead
+    template<> struct action<verilog::grammar::number_1> {
+      template<typename Input>
+      static void apply(const Input&, State& st) {
+	// Clear state for next number (just in case)
+	st.number_len.reset();
+	st.number_base.reset();
+	st.number_mantissa.clear();
+      }
+    };
 
     // -- Make sure the decl-mode is active when a decl starts (you already set kw_*; keep it)
 
@@ -379,8 +515,51 @@ namespace verilog {
     template<> struct action<verilog::grammar::expression> {
       template<typename Input>
       static void apply(const Input& in, State& st) {
-	st.last_expr_text = in.string();   // keep only the raw span
-	// (no pushing to st.expr_stack)
+	st.last_expr_text = in.string();
+	std::string text = in.string();
+	
+	// Skip if this is a concatenation (already handled by concat action)
+	if (!text.empty() && text[0] == '{') {
+	  return;
+	}
+	
+	// Build expression from text - make_expr_from_text handles numbers and identifiers correctly
+	st.expr_stack.emplace_back(make_expr_from_text(text));
+      }
+    };
+    
+    // Handle concatenations: collect expressions from stack into Concatenation
+    template<> struct action<verilog::grammar::concat> {
+      template<typename Input>
+      static void apply(const Input& in, State& st) {
+	// Count how many elements are in the concatenation by counting commas at depth 1
+	std::string text = in.string();
+	size_t comma_count = 0;
+	int brace_depth = 0;
+	for (char c : text) {
+	  if (c == '{') brace_depth++;
+	  else if (c == '}') brace_depth--;
+	  else if (c == ',' && brace_depth == 1) comma_count++;
+	}
+	size_t element_count = comma_count + 1;
+	
+	// Pop that many expressions from stack and build Concatenation
+	if (st.expr_stack.size() >= element_count) {
+	  std::vector<Expr> elements;
+	  elements.reserve(element_count);
+	  
+	  // Pop in reverse order (stack is LIFO)
+	  auto start_it = st.expr_stack.end() - element_count;
+	  for (auto it = start_it; it != st.expr_stack.end(); ++it) {
+	    elements.push_back(std::move(*it));
+	  }
+	  st.expr_stack.erase(start_it, st.expr_stack.end());
+	  
+	  // Push the Concatenation
+	  auto concat_ptr = std::make_shared<Concatenation>();
+	  concat_ptr->elements = std::move(elements);
+	  st.expr_stack.emplace_back(std::move(concat_ptr));
+	}
       }
     };
     

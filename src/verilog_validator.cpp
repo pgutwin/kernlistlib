@@ -10,7 +10,10 @@ namespace verilog {
   // ============================================================================
 
   static std::string get_identifier_from_expr(const Expr& e) {
-    if (auto id = std::get_if<Identifier>(&e)) {
+    if (auto num = std::get_if<Number>(&e)) {
+      // Numbers don't reference signals
+      return "";
+    } else if (auto id = std::get_if<Identifier>(&e)) {
       return id->name;
     } else if (auto ii = std::get_if<IdentifierIndexed>(&e)) {
       return ii->name;

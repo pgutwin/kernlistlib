@@ -71,6 +71,10 @@ namespace verilog {
   std::string VerilogWriter::format_expr(const Expr& e) {
     struct ExprFormatter {
       VerilogWriter& writer;
+      
+      std::string operator()(const Number& num) const {
+        return writer.format_number(num);
+      }
         
       std::string operator()(const Identifier& id) const {
 	return writer.format_identifier(id.name);

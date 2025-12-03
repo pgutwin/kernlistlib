@@ -20,23 +20,42 @@ namespace verilog {
     struct ident_more  : sor< alnum, one<'_','$'> > {};
     struct ident_norm  : seq< ident_start, star< ident_more > > {};
     struct ident_esc   : seq< one<'\\'>, plus< not_one<' ','\t','\r','\n','[',']','{','}','(',')','.',',',';','='> > > {};
-    struct header_port_ident : identifier {};
-
-    
 
     // Numbers
-    struct HEXDIG : ranges<'0','9','a','f','A','F'> {};
+    struct DECDIG : ranges<'0','9'> {};  // Decimal digits only
+    // struct HEXDIG : ranges<'0','9','a','f','A','F'> {};
+    struct HEXDIG : ranges<'0','9','a','f','A','F','x','z','X','Z'> {};
     struct unsigned_hex_str : plus< HEXDIG > {};
     struct sign : one<'+','-'> {};
     struct signed_hex_str : seq< sign, unsigned_hex_str > {};
     struct base_char : one<'b','B','h','H','o','O','d','D'> {};
     struct base : seq< one<'\''>, base_char > {};
+    // struct number_1 : sor<
+    //   unsigned_hex_str,
+    //   signed_hex_str,
+    //   seq< unsigned_hex_str, base, unsigned_hex_str >,
+    //   seq< base, unsigned_hex_str >
+    //   > {};
+
+    // Match numbers WITH base notation first (these are longer/more specific)
+    struct sized_number : seq< unsigned_hex_str, base, unsigned_hex_str > {};
+    struct unsized_number : seq< base, unsigned_hex_str > {};
+    struct signed_number : signed_hex_str {};
+    struct plain_number : plus< DECDIG > {};  // Plain numbers are decimal only
+
     struct number_1 : sor<
-      unsigned_hex_str,
-      signed_hex_str,
-      seq< unsigned_hex_str, base, unsigned_hex_str >,
-      seq< base, unsigned_hex_str >
+      sized_number,     // Match "2'hx" pattern first
+      unsized_number,   // Match "'hx" pattern  
+      signed_number,    // Match "+123" or "-456"
+      plain_number      // Match plain "123" last
       > {};
+
+    // struct number_1 : sor<
+    //   seq< unsigned_hex_str >,
+    //   seq< base, unsigned_hex_str >,
+    //   signed_hex_str,
+    //   unsigned_hex_str
+    //   > {};
 
     // Ranges
     struct lbrack : sym<'['> {}; struct rbrack : sym<']'> {}; struct colon : sym<':'> {};
@@ -55,6 +74,9 @@ namespace verilog {
     // zero-or-more selects lets you do foo[3], foo[7:0], foo[i][j], etc.
     struct identifier : tao::pegtl::seq< identifier_raw, tao::pegtl::star< range_or_select > > {};
 
+    // header_port_ident is used in module port lists - it's just an identifier
+    struct header_port_ident : identifier {};
+
     // Expr (subset)
     struct lbrace : sym<'{'> {}; struct rbrace : sym<'}'> {};
     struct lparen : sym<'('> {}; struct rparen : sym<')'> {};
@@ -64,7 +86,8 @@ namespace verilog {
     struct concat_list;
     struct concat : seq< lbrace, sep, concat_list, sep, rbrace > {};
     // identifier already supports zero-or-more selects: foo[3], foo[7:0], foo[i][j]
-    struct primary_expr : sor< concat, identifier > {};
+    // struct primary_expr : sor< concat, identifier > {};
+    struct primary_expr : sor< concat, number_1, identifier > {};
     struct expression : primary_expr {};
     struct concat_list : list_must< expression, seq< sep, comma, sep > > {};
 
