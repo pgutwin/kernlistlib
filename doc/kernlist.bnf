@@ -1,0 +1,57 @@
+; The kernlist grammar (draft). Extends veriloglib's structural subset (verilog_subset.bnf);
+; decisions in KERNLIST_decisions.md (KL03 to KL10). Notation as in verilog_subset.bnf:
+; {} repetition (0 or more), [] optional, "..." literal. Comments (// and /* */) and white space
+; may appear between any tokens.
+
+<file>               ::= <format_line> <module> { <module> }
+<format_line>        ::= "kernlist_format" <unsigned_decimal> ";"          ; KL03; must be 1
+
+<module>             ::= "module" <identifier> "(" [ <port_list> ] ")" ";" { <module_item> } "endmodule"
+<port_list>          ::= <identifier> { "," <identifier> }
+
+<module_item>        ::= <declaration> ";"
+                       | <continuous_assign>
+                       | <instantiation>
+                       | <invariant>
+
+<declaration>        ::= ( "input" | "output" | "wire" ) [ <range> ] <id_list>     ; no inout
+<id_list>            ::= <identifier> { "," <identifier> }
+<range>              ::= "[" <unsigned_decimal> ":" <unsigned_decimal> "]"
+
+<continuous_assign>  ::= "assign" <lvalue> "=" <expression> { "," <lvalue> "=" <expression> } ";"
+<lvalue>             ::= <identifier> [ <select> ] | "{" <lvalue> { "," <lvalue> } "}"
+
+; KL06: a motif instance (or an instance of another module, which has no variant)
+<instantiation>      ::= <identifier> [ <parameters> ] [ "variant" <identifier> ]
+                         <identifier> "(" [ <connection> { "," <connection> } ] ")" ";"
+<parameters>         ::= "#" "(" <parameter> { "," <parameter> } ")"
+<parameter>          ::= "." <identifier> "(" <unsigned_decimal> ")"
+<connection>         ::= "." <identifier> "(" [ <expression> ] ")"       ; KL04: outputs to declared wires
+
+; KL08: expressions in assign and connections. Precedence, lowest first:
+;   ?:   |   ^   &   == !=   unary (~ & | ^)   primary
+<expression>         ::= <or_expr> [ "?" <expression> ":" <expression> ]
+<or_expr>            ::= <xor_expr> { "|" <xor_expr> }
+<xor_expr>           ::= <and_expr> { "^" <and_expr> }
+<and_expr>           ::= <eq_expr> { "&" <eq_expr> }
+<eq_expr>            ::= <unary> [ ( "==" | "!=" ) <unary> ]
+<unary>              ::= [ "~" | "&" | "|" | "^" ] <primary>
+<primary>            ::= <identifier> [ <select> ]
+                       | <sized_number>
+                       | "{" <expression> { "," <expression> } "}"
+                       | "{" <unsigned_decimal> "{" <expression> { "," <expression> } "}" "}"
+                       | "(" <expression> ")"
+<select>             ::= "[" <unsigned_decimal> [ ":" <unsigned_decimal> ] "]"
+
+; KL10: invariants, with their own wider expression language
+<invariant>          ::= "invariant" <identifier> ":" <inv_expression> ";"
+<inv_expression>     ::= <inv_compare> [ "->" <inv_compare> ]
+<inv_compare>        ::= <inv_sum> [ ( "==" | "!=" | "<" | "<=" | ">" | ">=" ) <inv_sum> ]
+<inv_sum>            ::= <inv_term> { ( "+" | "-" ) <inv_term> }
+<inv_term>           ::= <model_ref> | <unsigned_decimal> | <expression>
+<model_ref>          ::= "model" "(" <identifier> "." <identifier> [ <select> ] ")"
+
+<sized_number>       ::= <unsigned_decimal> "'" <base_char> <digits>      ; as in verilog_subset.bnf
+<base_char>          ::= "b" | "B" | "o" | "O" | "d" | "D" | "h" | "H"
+<unsigned_decimal>   ::= "0".."9" { "0".."9" }
+<identifier>         ::= as in verilog_subset.bnf (normal or escaped)

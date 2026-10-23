@@ -62,8 +62,8 @@ CMakeLists.txt
 containers/kernlistlib.def   the build environment (glibc 2.28)
 doc/
   KERNLIST_decisions.md      append-only log, KL01, KL02, ...
-  KERNLIST_format.md         the format specification (to come)
-  kernlist.bnf               the grammar (to come)
+  KERNLIST_format.md         the format specification
+  kernlist.bnf               the grammar
   verilog_subset.bnf, ...    veriloglib's documents, kept as they were at the fork
 include/  src/               the library and the command-line tool
 tests/                       unit tests; tests/kernlists/ for example kernlists (to come)

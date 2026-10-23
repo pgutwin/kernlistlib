@@ -32,6 +32,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - kern-design-examples session: `CLAUDE.md`, `doc/KERNLIST_decisions.md` and a README preamble.
 - kern-design-examples session: build environment `containers/kernlistlib.def`, from the owner's
   Apptainer example (KL02).
+- kern-design-examples session: `doc/KERNLIST_format.md`, the format specification (draft); file
+  structure decided: Verilog modules after a required `kernlist_format 1;` (KL03).
+- kern-design-examples session: format decisions KL04 (a motif's outputs named through declared
+  wires) and KL05 (files end in `.kl`), in `doc/KERNLIST_format.md`.
+- kern-design-examples session: format decision KL06 (a motif instance is a plain Verilog
+  instantiation with `variant` after the parameters), in `doc/KERNLIST_format.md`.
+- kern-design-examples session: format decision KL07 (logic between motifs as plain `assign`;
+  groups by a stated rule; figures not in the file), in `doc/KERNLIST_format.md`.
+- kern-design-examples session: format decision KL08 (operators: bitwise logic and selection only),
+  in `doc/KERNLIST_format.md`.
+- kern-design-examples session: format decision KL09 (handshake pairs worked out by a stated rule,
+  not written), in `doc/KERNLIST_format.md`.
+- kern-design-examples session: format decision KL10 (invariants inline, as `invariant` statements
+  with their own expression language), in `doc/KERNLIST_format.md`.
+- kern-design-examples session: format decision KL11 (reading and checking one file in
+  kernlistlib now, linking with the motif library later), in `doc/KERNLIST_format.md`.
+- kern-design-examples session: format decision KL12 (no JSON form for now); `doc/kernlist.bnf`,
+  the grammar (draft).
 - kern-design-examples session: baseline confirmed. The code as forked builds and passes all 39
   tests in Claude's workspace (GCC 13.3, CMake 3.28, Ninja) and in the container on the owner's
   Linux platform.
