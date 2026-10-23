@@ -46,7 +46,14 @@ gtest_discover_tests(verilog_tests)
 option(KERNLISTLIB_PYTHON "Build the Python bindings" ON)
 if(KERNLISTLIB_PYTHON)
   set(PYBIND11_FINDPYTHON ON)
+  # The container names its interpreter (KERNLISTLIB_PYTHON_EXECUTABLE), so that a Python found
+  # first on the PATH passed in from the host, perhaps without its development files, is not used.
+  # -DPython_EXECUTABLE=... on the command line still takes precedence.
+  if(NOT Python_EXECUTABLE AND DEFINED ENV{KERNLISTLIB_PYTHON_EXECUTABLE})
+    set(Python_EXECUTABLE "$ENV{KERNLISTLIB_PYTHON_EXECUTABLE}" CACHE FILEPATH "Python for the bindings")
+  endif()
   find_package(Python 3.8 COMPONENTS Interpreter Development.Module REQUIRED)
+  message(STATUS "Python bindings use ${Python_EXECUTABLE} (${Python_VERSION})")
   FetchContent_Declare(
     pybind11
     GIT_REPOSITORY https://github.com/pybind/pybind11.git

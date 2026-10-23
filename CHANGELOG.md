@@ -115,6 +115,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   positional connections, `(* *)` read as a comment, unsized `'h` and signed constants
   (`add_inout`, `remove_inout`, `ports_pos`, `ports_named`).
 
+### Fixed
+- kern-design-examples session: configuring in the container picked a Python 3.12 without
+  development files from the host's PATH. The container now names its Python
+  (`KERNLISTLIB_PYTHON_EXECUTABLE=/usr/bin/python3.11`), CMakeLists.txt uses it unless
+  `-DPython_EXECUTABLE` is given, and the configure step reports which Python it uses.
+
 ## [n/a] 20 November 2025
 
 ### Changed

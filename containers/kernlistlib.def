@@ -48,6 +48,9 @@ From: rockylinux:8
     export AS=/opt/rh/gcc-toolset-13/root/usr/bin/as
     export LD=/opt/rh/gcc-toolset-13/root/usr/bin/ld
     export CMAKE_GENERATOR=Ninja
+    # The Python for the bindings (KL19); CMakeLists.txt reads this, so that a Python on the
+    # host's PATH, passed into the container, is not picked instead
+    export KERNLISTLIB_PYTHON_EXECUTABLE=/usr/bin/python3.11
 
 %test
     test "$(command -v gcc)" = "/opt/rh/gcc-toolset-13/root/usr/bin/gcc"
@@ -61,6 +64,7 @@ From: rockylinux:8
     bison --version
     flex --version
     python3 --version
+    test -x "$KERNLISTLIB_PYTHON_EXECUTABLE"
     python3 -c "import sysconfig, os; assert os.path.exists(os.path.join(sysconfig.get_paths()['include'], 'Python.h'))"
 
 %runscript
