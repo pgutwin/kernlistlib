@@ -67,8 +67,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keywords are not identifiers; `&&`, `||` and `->` are single tokens; a sized number is one
   constant.
 
+- kern-design-examples session: format decision KL14 (a syntax error stops reading; checking
+  reports every problem), in `doc/KERNLIST_format.md`.
+- kern-design-examples session: the reader reads the kernlist format (KL15): a rewritten grammar
+  (`include/verilog_grammar.hpp`, following `doc/kernlist.bnf`) and reader (`src/veriloglib.cpp`),
+  syntax errors with line, column and a message. The data model gains the format version, source
+  locations, instance parameters, `variant`, ordered connections (a port may be unconnected),
+  operators, replication, choice, model values and invariants. The writer writes all of these,
+  with the format line and only the parentheses needed. The builder gains `make_replication`,
+  `make_unary`, `make_binary`, `make_choice`, `make_model_ref` and `add_invariant`;
+  `make_instance` takes connections. Names are held unescaped; the writer escapes them.
+- kern-design-examples session: `tests/test_kernlists.cpp` reads the test set and compares with
+  each file's expectation, and writes and reads back every valid file; the parse tests in
+  `tests/test_verilog.cpp` are rewritten in the kernlist form, with tests for parameters,
+  `variant`, operators and their precedence, invariants and error positions (53 tests).
+
 ### Removed
 - kern-design-examples session: `tests/test_verilog.cpp.bak`, a leftover.
+- kern-design-examples session: `include/verilog_actions.hpp`, veriloglib's reader actions,
+  replaced by the parse tree conversion in `src/veriloglib.cpp` (KL15).
+- kern-design-examples session: from the reader and data model, as not in the format: `inout`,
+  positional connections, `(* *)` read as a comment, unsized `'h` and signed constants
+  (`add_inout`, `remove_inout`, `ports_pos`, `ports_named`).
 
 ## [n/a] 20 November 2025
 

@@ -51,7 +51,7 @@ namespace verilog {
   // If opts.validate_before_write is true, throws on validation errors
   std::string write_module(const Module& m, const WriterOptions& opts = {});
 
-  // Write entire netlist to string
+  // Write entire netlist to string, starting with its format line (kernlist_format N;)
   std::string write_netlist(const Netlist& nl, const WriterOptions& opts = {});
 
   // Write individual components (for testing/debugging)
@@ -77,6 +77,8 @@ namespace verilog {
     void write_declarations(const Module& m);
     void write_assignments(const Module& m);
     void write_instances(const Module& m);
+    void write_invariants(const Module& m);
+    std::string format_expr_at(const Expr& e, int level);
     
     void check_no_sub_modules(const Module& m);
     

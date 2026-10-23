@@ -4,9 +4,18 @@ The parser, writer and validator for the **kernlist**, KERN's
 description of a design as motif instances, the logic between them and
 their connections. A fork of veriloglib at commit `6f02bcc`; the
 kernlist format extends veriloglib's structural Verilog subset with
-KERN's concepts. The format is not yet specified: what follows below
-is veriloglib's README as it was at the fork, and describes the code
-until the kernlist changes begin. Decisions: `doc/KERNLIST_decisions.md`.
+KERN's concepts. The format: `doc/KERNLIST_format.md` and
+`doc/kernlist.bnf`; decisions: `doc/KERNLIST_decisions.md`.
+
+The reader now reads the kernlist format, not Verilog: a file starts
+with `kernlist_format 1;`, and instances take parameters, `variant`,
+and named connections only. The data model is in
+`include/veriloglib.hpp`. What follows below the line is veriloglib's
+README as it was at the fork; its description of the grammar and the
+data model (inout, positional connections, attributes as comments) is
+out of date and will be rewritten once the format settles.
+
+    ./build/vparse path/to/file.kl
 
 Build environment: `containers/kernlistlib.def` (Apptainer; Rocky
 Linux 8, glibc 2.28, GCC 13):

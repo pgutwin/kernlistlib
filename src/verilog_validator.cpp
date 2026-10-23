@@ -28,6 +28,17 @@ namespace verilog {
       for (const auto& elem : (*concat)->elements) {
 	collect_expr_identifiers(elem, ids);
       }
+    } else if (auto r = std::get_if<std::shared_ptr<Replication>>(&e)) {
+      for (const auto& elem : (*r)->elements) collect_expr_identifiers(elem, ids);
+    } else if (auto u = std::get_if<std::shared_ptr<UnaryOp>>(&e)) {
+      collect_expr_identifiers((*u)->operand, ids);
+    } else if (auto b = std::get_if<std::shared_ptr<BinaryOp>>(&e)) {
+      collect_expr_identifiers((*b)->lhs, ids);
+      collect_expr_identifiers((*b)->rhs, ids);
+    } else if (auto c = std::get_if<std::shared_ptr<Choice>>(&e)) {
+      collect_expr_identifiers((*c)->condition, ids);
+      collect_expr_identifiers((*c)->if_true, ids);
+      collect_expr_identifiers((*c)->if_false, ids);
     } else {
       std::string id = get_identifier_from_expr(e);
       if (!id.empty()) {
@@ -72,19 +83,6 @@ namespace verilog {
     
     // Check for duplicate outputs
     for (const auto& decl : m.output_declarations) {
-      if (all_signals.count(decl.net_name)) {
-	errors.emplace_back(
-			    "Duplicate signal name: " + decl.net_name,
-			    mod_loc,
-			    ValidationError::Severity::ERROR
-			    );
-      }
-      all_signals.insert(decl.net_name);
-      port_signals.insert(decl.net_name);
-    }
-    
-    // Check for duplicate inouts
-    for (const auto& decl : m.inout_declarations) {
       if (all_signals.count(decl.net_name)) {
 	errors.emplace_back(
 			    "Duplicate signal name: " + decl.net_name,
@@ -155,22 +153,10 @@ namespace verilog {
       }
       instance_names.insert(inst.instance_name);
         
-      // Check for mixing positional and named connections
-      if (!inst.ports_pos.empty() && !inst.ports_named.empty()) {
-	errors.emplace_back(
-			    "Instance '" + inst.instance_name + "' mixes positional and named port connections",
-			    mod_loc + ".instance " + inst.instance_name,
-			    ValidationError::Severity::WARNING
-			    );
-      }
-        
       // Check that connection expressions reference valid signals
       std::set<std::string> used_signals;
-      for (const auto& port_expr : inst.ports_pos) {
-	collect_expr_identifiers(port_expr, used_signals);
-      }
-      for (const auto& [port_name, port_expr] : inst.ports_named) {
-	collect_expr_identifiers(port_expr, used_signals);
+      for (const auto& c : inst.connections) {
+	if (c.expr) collect_expr_identifiers(*c.expr, used_signals);
       }
         
       for (const auto& sig : used_signals) {

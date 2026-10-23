@@ -64,44 +64,79 @@ namespace verilog {
   }
 
   std::string VerilogWriter::format_identifier(const std::string& name) {
-    // Name should already be escaped if needed by builder functions
-    return name;
+    // Names are held without escaping; escape where the format needs it
+    return escape_identifier(name);
   }
 
-  std::string VerilogWriter::format_expr(const Expr& e) {
+  // Operator precedence, lowest first (doc/kernlist.bnf):
+  //   1 ->   2 ?:   3 |   4 ^   5 &   6 == !=   7 < <= > >=   8 + -   9 unary   10 primary
+  static int binary_level(const std::string& op) {
+    if (op == "->") return 1;
+    if (op == "|") return 3;
+    if (op == "^") return 4;
+    if (op == "&") return 5;
+    if (op == "==" || op == "!=") return 6;
+    if (op == "<" || op == "<=" || op == ">" || op == ">=") return 7;
+    return 8;  // + -
+  }
+
+  std::string VerilogWriter::format_expr(const Expr& e) { return format_expr_at(e, 1); }
+
+  // Writes e so that it reads back as one operand at the given precedence level,
+  // adding parentheses only where needed.
+  std::string VerilogWriter::format_expr_at(const Expr& e, int level) {
     struct ExprFormatter {
       VerilogWriter& writer;
-      
-      std::string operator()(const Number& num) const {
-        return writer.format_number(num);
-      }
-        
-      std::string operator()(const Identifier& id) const {
-	return writer.format_identifier(id.name);
-      }
-        
+      int& own_level;
+
+      std::string operator()(const Number& num) const { return writer.format_number(num); }
+      std::string operator()(const Identifier& id) const { return writer.format_identifier(id.name); }
       std::string operator()(const IdentifierIndexed& ii) const {
-	return writer.format_identifier(ii.name) + "[" + writer.format_number(ii.index) + "]";
+        return writer.format_identifier(ii.name) + "[" + writer.format_number(ii.index) + "]";
       }
-        
       std::string operator()(const IdentifierSliced& is) const {
-	return writer.format_identifier(is.name) + writer.format_range(is.range);
+        return writer.format_identifier(is.name) + writer.format_range(is.range);
       }
-        
-      std::string operator()(const std::shared_ptr<Concatenation>& concat) const {
-	std::string result = "{";
-	bool first = true;
-	for (const auto& elem : concat->elements) {
-	  if (!first) result += ", ";
-	  first = false;
-	  result += writer.format_expr(elem);
-	}
-	result += "}";
-	return result;
+      std::string list(const std::vector<Expr>& elements) const {
+        std::string result;
+        for (size_t i = 0; i < elements.size(); ++i) {
+          if (i) result += ", ";
+          result += writer.format_expr_at(elements[i], 1);
+        }
+        return result;
+      }
+      std::string operator()(const std::shared_ptr<Concatenation>& c) const { return "{" + list(c->elements) + "}"; }
+      std::string operator()(const std::shared_ptr<Replication>& r) const {
+        return "{" + writer.format_number(r->count) + "{" + list(r->elements) + "}}";
+      }
+      std::string operator()(const ModelRef& m) const {
+        std::string s = "model(" + writer.format_identifier(m.instance) + "." + writer.format_identifier(m.name);
+        if (m.index) s += "[" + writer.format_number(*m.index) + "]";
+        if (m.range) s += writer.format_range(*m.range);
+        return s + ")";
+      }
+      std::string operator()(const std::shared_ptr<UnaryOp>& u) const {
+        own_level = 9;
+        return u->op + writer.format_expr_at(u->operand, 10);
+      }
+      std::string operator()(const std::shared_ptr<BinaryOp>& b) const {
+        int l = binary_level(b->op);
+        own_level = l;
+        // | ^ & + - group to the left; the others take no operand at their own level
+        bool left_grouping = (l == 3 || l == 4 || l == 5 || l == 8);
+        return writer.format_expr_at(b->lhs, left_grouping ? l : l + 1) + " " + b->op + " "
+          + writer.format_expr_at(b->rhs, l + 1);
+      }
+      std::string operator()(const std::shared_ptr<Choice>& c) const {
+        own_level = 2;
+        return writer.format_expr_at(c->condition, 3) + " ? " + writer.format_expr_at(c->if_true, 2)
+          + " : " + writer.format_expr_at(c->if_false, 2);
       }
     };
-    
-    return std::visit(ExprFormatter{*this}, e);
+
+    int own_level = 10;
+    std::string text = std::visit(ExprFormatter{*this, own_level}, e);
+    return own_level < level ? "(" + text + ")" : text;
   }
 
   void VerilogWriter::check_no_sub_modules(const Module& m) {
@@ -177,21 +212,6 @@ namespace verilog {
       need_blank_line = true;
     }
     
-    // Write inout declarations
-    if (!m.inout_declarations.empty()) {
-      if (need_blank_line) write_newline();
-      for (const auto& decl : m.inout_declarations) {
-	write_indent();
-	out_ << "inout";
-	if (decl.range.has_value()) {
-	  out_ << " " << format_range(decl.range.value());
-	}
-	out_ << " " << format_identifier(decl.net_name) << ";";
-	write_newline();
-      }
-      need_blank_line = true;
-    }
-    
     // Write wire declarations
     if (!m.net_declarations.empty()) {
       if (need_blank_line) write_newline();
@@ -222,49 +242,49 @@ namespace verilog {
 
   void VerilogWriter::write_instances(const Module& m) {
     if (m.module_instances.empty()) return;
-    
+
     write_newline();
     for (const auto& inst : m.module_instances) {
       write_indent();
-      out_ << format_identifier(inst.module_name) << " " 
-	   << format_identifier(inst.instance_name);
-        
-      // Write port connections
-      if (!inst.ports_pos.empty()) {
-	// Positional connections
-	out_ << "(";
-	for (size_t i = 0; i < inst.ports_pos.size(); ++i) {
-	  if (i > 0) out_ << ", ";
-	  out_ << format_expr(inst.ports_pos[i]);
-	}
-	out_ << ");";
-	write_newline();
-      } else if (!inst.ports_named.empty()) {
-	// Named connections - each on separate line
-	out_ << "(";
-	write_newline();
-	indent_level_++;
-            
-	size_t idx = 0;
-	for (const auto& [port_name, port_expr] : inst.ports_named) {
-	  write_indent();
-	  out_ << "." << port_name << "(" << format_expr(port_expr) << ")";
-	  if (idx < inst.ports_named.size() - 1) {
-	    out_ << ",";
-	  }
-	  write_newline();
-	  idx++;
-	}
-            
-	indent_level_--;
-	write_indent();
-	out_ << ");";
-	write_newline();
-      } else {
-	// No connections
-	out_ << "();";
-	write_newline();
+      out_ << format_identifier(inst.module_name);
+      if (!inst.parameters.empty()) {
+        out_ << " #(";
+        for (size_t i = 0; i < inst.parameters.size(); ++i) {
+          if (i) out_ << ", ";
+          out_ << "." << format_identifier(inst.parameters[i].name) << "(" << inst.parameters[i].value << ")";
+        }
+        out_ << ")";
       }
+      if (inst.variant) out_ << " variant " << format_identifier(*inst.variant);
+      out_ << " " << format_identifier(inst.instance_name) << " (";
+      if (inst.connections.empty()) {
+        out_ << ");";
+        write_newline();
+        continue;
+      }
+      write_newline();
+      indent_level_++;
+      for (size_t i = 0; i < inst.connections.size(); ++i) {
+        const auto& c = inst.connections[i];
+        write_indent();
+        out_ << "." << format_identifier(c.port) << "(" << (c.expr ? format_expr(*c.expr) : "") << ")";
+        if (i + 1 < inst.connections.size()) out_ << ",";
+        write_newline();
+      }
+      indent_level_--;
+      write_indent();
+      out_ << ");";
+      write_newline();
+    }
+  }
+
+  void VerilogWriter::write_invariants(const Module& m) {
+    if (m.invariants.empty()) return;
+    write_newline();
+    for (const auto& inv : m.invariants) {
+      write_indent();
+      out_ << "invariant " << format_identifier(inv.name) << ": " << format_expr(inv.expr) << ";";
+      write_newline();
     }
   }
 
@@ -281,6 +301,7 @@ namespace verilog {
     write_declarations(m);
     write_assignments(m);
     write_instances(m);
+    write_invariants(m);
     indent_level_--;
     
     out_ << "endmodule";
@@ -290,8 +311,8 @@ namespace verilog {
   }
 
   std::string VerilogWriter::write(const Netlist& nl) {
-    std::string result;
-    
+    std::string result = "kernlist_format " + std::to_string(nl.format_version) + ";\n\n";
+
     for (size_t i = 0; i < nl.modules.size(); ++i) {
       if (i > 0) result += "\n";
       result += write(nl.modules[i]);  // Each returns independent string

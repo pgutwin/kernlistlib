@@ -21,7 +21,8 @@ namespace verilog {
   // Expression Construction Helpers
   // ============================================================================
 
-  // Check if identifier needs escaping and escape it
+  // Check if identifier needs escaping and escape it. Names are held unescaped in the data
+  // model; the writer escapes them with these.
   bool needs_escaping(const std::string& name);
   std::string escape_identifier(const std::string& name);
 
@@ -39,6 +40,16 @@ namespace verilog {
   // Concatenation: {expr1, expr2, ...}
   Expr make_concatenation(const std::vector<Expr>& elements);
 
+  // Replication {count{expr1, ...}}, operators, choice, model value (KL08, KL10)
+  Expr make_replication(int64_t count, const std::vector<Expr>& elements);
+  Expr make_unary(const std::string& op, const Expr& operand);
+  Expr make_binary(const std::string& op, const Expr& lhs, const Expr& rhs);
+  Expr make_choice(const Expr& condition, const Expr& if_true, const Expr& if_false);
+  Expr make_model_ref(const std::string& instance, const std::string& name);
+
+  // Add an invariant statement (KL10)
+  void add_invariant(Module& m, const std::string& name, const Expr& expr);
+
   // ============================================================================
   // Module Construction
   // ============================================================================
@@ -54,7 +65,6 @@ namespace verilog {
   // Throws std::invalid_argument if name already exists
   void add_input(Module& m, const std::string& name, std::optional<Range> range = std::nullopt);
   void add_output(Module& m, const std::string& name, std::optional<Range> range = std::nullopt);
-  void add_inout(Module& m, const std::string& name, std::optional<Range> range = std::nullopt);
 
   // Add internal wire (not added to port list)
   // Throws std::invalid_argument if name already exists
@@ -71,14 +81,14 @@ namespace verilog {
   // Module Instance Construction
   // ============================================================================
 
-  // Create module instance with positional port connections
+  // Create module instance with connections in the given order (all connections are by name)
   ModuleInstance make_instance(
 			       const std::string& module_name,
 			       const std::string& instance_name,
-			       const std::vector<Expr>& positional_ports = {}
+			       const std::vector<Connection>& connections = {}
 			       );
 
-  // Create module instance with named port connections
+  // Create module instance with named port connections, in the order of the port names
   ModuleInstance make_instance_named(
 				     const std::string& module_name,
 				     const std::string& instance_name,
@@ -93,7 +103,6 @@ namespace verilog {
   // Returns true if found and removed
   bool remove_input(Module& m, const std::string& name);
   bool remove_output(Module& m, const std::string& name);
-  bool remove_inout(Module& m, const std::string& name);
   bool remove_wire(Module& m, const std::string& name);
 
   // Remove instance by name
@@ -109,7 +118,7 @@ namespace verilog {
   // Check if signal exists
   bool has_port(const Module& m, const std::string& name);
   bool has_wire(const Module& m, const std::string& name);
-  bool has_signal(const Module& m, const std::string& name); // any input/output/inout/wire
+  bool has_signal(const Module& m, const std::string& name); // any input/output/wire
 
   // Find instances
   const ModuleInstance* find_instance(const Module& m, const std::string& instance_name);

@@ -65,7 +65,8 @@ doc/
   KERNLIST_format.md         the format specification
   kernlist.bnf               the grammar
   verilog_subset.bnf, ...    veriloglib's documents, kept as they were at the fork
-include/  src/               the library and the command-line tool
+include/  src/               the library and the command-line tool (vparse); the grammar is
+                             include/verilog_grammar.hpp, the reader src/veriloglib.cpp
 tests/                       unit tests; tests/kernlists/ the kernlist test set (README there)
 python/                      Python bindings (to come)
 ```

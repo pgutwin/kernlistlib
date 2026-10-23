@@ -7,7 +7,7 @@
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    std::cerr << "Usage: vparse [--trace] <file.v>\n";
+    std::cerr << "Usage: vparse [--trace] <file.kl>\n";
     return 1;
   }
 
@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
   //   vparse --trace file.v
   if (std::string(argv[1]) == "--trace") {
     if (argc < 3) {
-      std::cerr << "Usage: vparse [--trace] <file.v>\n";
+      std::cerr << "Usage: vparse [--trace] <file.kl>\n";
       return 1;
     }
     do_trace = true;
@@ -33,12 +33,13 @@ int main(int argc, char** argv) {
       // Run PEGTL's standard trace on the full Verilog grammar.
       // This will dump the enter/exit events for each rule as it parses.
       tao::pegtl::file_input<> in(filename);
-      const bool ok = tao::pegtl::standard_trace<verilog::grammar::start>(in);
+      const bool ok = tao::pegtl::standard_trace<verilog::grammar::file>(in);
       return ok ? 0 : 2;
     }
 
     // Normal path: just parse and print a summary.
     verilog::Netlist nl = verilog::parse_file(filename);
+    std::cout << "Format version: " << nl.format_version << "\n";
     std::cout << "Parsed modules: " << nl.modules.size() << "\n";
     for (const auto& m : nl.modules) {
       std::cout << m.summary() << "\n";

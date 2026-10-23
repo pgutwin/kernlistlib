@@ -184,3 +184,34 @@ fail in checking with such messages, and `->` below an invariant's
 outermost operator is a checking error too. Forms that are in no part
 of the format (`* / %`, shifts, `&&`, `||`) are still rejected by the
 reader.
+
+**KL14. A syntax error stops reading; checking reports every problem
+it finds.** Decided by the owner, from three options: (A) report the
+first mistake only and stop, as veriloglib does; (B) a syntax error
+stops reading, and checking, on a file that reads, reports all its
+problems in one run; (C) report everything, the reader skipping to the
+next `;` after a syntax error and carrying on. B was chosen: since KL13
+moved the common mistakes (forbidden operators) into checking, B lists
+nearly all of a designer's errors in one run while the reader stays
+simple; after a syntax error, what follows cannot be trusted, so later
+messages under C would sometimes be wrong.
+
+**KL15. The reader is rewritten against the grammar; the data model is
+extended in place.** A technical decision, made in the session for the
+owner's review. veriloglib's reader re-scanned the text of each
+expression to rebuild it, which cannot carry operators and their
+precedence; its data model had no source lines (needed for KL14's
+messages), parameters, `variant` or invariants. The reader is now a
+rule-by-rule transcription of `kernlist.bnf` in PEGTL that builds a
+parse tree and converts it; veriloglib's data model, builder, writer and
+validator are kept and extended. Changes to the data model: the format
+version; a line and column on modules and statements; parameters,
+`variant` and connections in the order written (a port may be left
+unconnected) on instances; operators, replication, choice and model
+values in expressions; invariants. Removed, as not in the format:
+`inout`, positional connections, `(* *)` read as a comment, unsized
+`'h` and signed constants. Names are held without the backslash of an
+escaped identifier, and the writer escapes them where needed (the
+builder used to store them escaped). Names in code (`verilog`
+namespace, `vparse`) are unchanged, as KL01 left the renaming open.
+

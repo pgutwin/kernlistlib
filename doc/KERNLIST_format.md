@@ -185,6 +185,10 @@ want only the circuit skip `invariant` statements.
 | checking one file | the file | the format version; names declared before use, and declared once (ports, wires, instances, invariants, modules); KL08's limits in `assign` and connections, and the forms of 2.6 only in `invariant` (KL13); no `variant` on an instance of a module in the same file; the logic groups of 2.4 | yes |
 | linking | the file, other modules, the motif library | resolving each instantiated name to a module or a family (unresolved names are an error here); parameters and port names against the family; handshake ends and pairs (2.5); model names in invariants | later; until then, the flow's tools |
 
+Reporting (KL14): a syntax error stops reading, and only it is
+reported. A file that reads is checked completely, and every problem is
+reported, each with its line.
+
 ### 2.8 Forms (KL12)
 
 The `.kl` text is the only form; Python tools read it through

@@ -1,150 +1,160 @@
 #pragma once
+// The kernlist grammar in PEGTL, following doc/KERNLIST_format.md and doc/kernlist.bnf rule by
+// rule. Every token rule consumes the white space and comments after it; the file starts with
+// skipping them. Rules named in kernlist_reader.cpp's selector become nodes of the parse tree.
 #include <tao/pegtl.hpp>
 
 namespace verilog {
   namespace grammar {
     using namespace tao::pegtl;
 
-    // Whitespace/comments
-    struct space : sor< one<' '>, one<'\t'>, one<'\r'>, one<'\n'> > {};
-    struct line_comment : if_must< string<'/','/'>, until< eolf > > {};
-    struct block_comment1 : if_must< string<'/','*'>, until< string<'*','/'> > > {};
-    struct block_comment2 : if_must< string<'(','*'>, until< string<'*',')'> > > {};
-    struct sep  : star< sor< space, line_comment, block_comment1, block_comment2 > > {};
-    struct seps : plus< sor< space, line_comment, block_comment1, block_comment2 > > {};
-    template<char C>
-    struct sym : tao::pegtl::seq< sep, tao::pegtl::one<C>, sep > {};
+    // ---- white space and comments (only // and /* */)
+    struct line_comment : seq< two<'/'>, until< eolf > > {};
+    struct block_comment_end : string<'*','/'> {};
+    struct block_comment : if_must< string<'/','*'>, until< block_comment_end > > {};
+    struct sp : star< sor< plus< space >, line_comment, block_comment > > {};
 
-    // Identifiers
-    struct ident_start : sor< alpha, one<'_'> > {};
-    struct ident_more  : sor< alnum, one<'_','$'> > {};
-    struct ident_norm  : seq< ident_start, star< ident_more > > {};
-    struct ident_esc   : seq< one<'\\'>, plus< not_one<' ','\t','\r','\n','[',']','{','}','(',')','.',',',';','='> > > {};
+    // ---- identifiers: normal or escaped; keywords are not identifiers
+    struct ident_first : ranges<'a','z','A','Z','_','_'> {};
+    struct ident_other : ranges<'a','z','A','Z','0','9','_','_','$','$'> {};
+    struct keyword : seq< sor< TAO_PEGTL_STRING("kernlist_format"), TAO_PEGTL_STRING("endmodule"),
+                               TAO_PEGTL_STRING("module"), TAO_PEGTL_STRING("input"),
+                               TAO_PEGTL_STRING("output"), TAO_PEGTL_STRING("wire"),
+                               TAO_PEGTL_STRING("assign"), TAO_PEGTL_STRING("invariant"),
+                               TAO_PEGTL_STRING("variant"), TAO_PEGTL_STRING("model") >,
+                          not_at< ident_other > > {};
+    struct ident_normal : seq< not_at< keyword >, ident_first, star< ident_other > > {};
+    // Verilog: a backslash, then any printable characters, ended by white space
+    struct ident_escaped : seq< one<'\\'>, plus< not_one<' ','\t','\r','\n'> > > {};
+    struct identifier : sor< ident_escaped, ident_normal > {};
 
-    // Numbers
-    struct DECDIG : ranges<'0','9'> {};  // Decimal digits only
-    // struct HEXDIG : ranges<'0','9','a','f','A','F'> {};
-    struct HEXDIG : ranges<'0','9','a','f','A','F','x','z','X','Z'> {};
-    struct unsigned_hex_str : plus< HEXDIG > {};
-    struct sign : one<'+','-'> {};
-    struct signed_hex_str : seq< sign, unsigned_hex_str > {};
-    struct base_char : one<'b','B','h','H','o','O','d','D'> {};
-    struct base : seq< one<'\''>, base_char > {};
-    // struct number_1 : sor<
-    //   unsigned_hex_str,
-    //   signed_hex_str,
-    //   seq< unsigned_hex_str, base, unsigned_hex_str >,
-    //   seq< base, unsigned_hex_str >
-    //   > {};
+    // Names in their roles (the parse tree keeps these)
+    struct module_name : identifier {};
+    struct port_name : identifier {};
+    struct declared_name : identifier {};
+    struct type_name : identifier {};
+    struct parameter_name : identifier {};
+    struct variant_name : identifier {};
+    struct instance_name : identifier {};
+    struct connection_port : identifier {};
+    struct invariant_name : identifier {};
+    struct model_instance : identifier {};
+    struct model_name : identifier {};
+    struct signal_name : identifier {};
 
-    // Match numbers WITH base notation first (these are longer/more specific)
-    struct sized_number : seq< unsigned_hex_str, base, unsigned_hex_str > {};
-    struct unsized_number : seq< base, unsigned_hex_str > {};
-    struct signed_number : signed_hex_str {};
-    struct plain_number : plus< DECDIG > {};  // Plain numbers are decimal only
+    template< typename R > struct token : seq< R, sp > {};
 
-    struct number_1 : sor<
-      sized_number,     // Match "2'hx" pattern first
-      unsized_number,   // Match "'hx" pattern  
-      signed_number,    // Match "+123" or "-456"
-      plain_number      // Match plain "123" last
-      > {};
+    // ---- punctuation
+    struct semi : token< one<';'> > {};
+    struct comma : token< one<','> > {};
+    struct lparen : token< one<'('> > {};
+    struct rparen : token< one<')'> > {};
+    struct lbrack : token< one<'['> > {};
+    struct rbrack : token< one<']'> > {};
+    struct lbrace : token< one<'{'> > {};
+    struct rbrace : token< one<'}'> > {};
+    struct colon : token< one<':'> > {};
+    struct dot : token< one<'.'> > {};
+    struct hash : token< one<'#'> > {};
+    struct qmark : token< one<'?'> > {};
+    struct equals : token< seq< one<'='>, not_at< one<'='> > > > {};
 
-    // struct number_1 : sor<
-    //   seq< unsigned_hex_str >,
-    //   seq< base, unsigned_hex_str >,
-    //   signed_hex_str,
-    //   unsigned_hex_str
-    //   > {};
+    // ---- keywords
+    template< typename S > struct kw : seq< S, not_at< ident_other >, sp > {};
+    struct kw_format : kw< TAO_PEGTL_STRING("kernlist_format") > {};
+    struct kw_module : kw< TAO_PEGTL_STRING("module") > {};
+    struct kw_endmodule : kw< TAO_PEGTL_STRING("endmodule") > {};
+    struct kw_input : kw< TAO_PEGTL_STRING("input") > {};
+    struct kw_output : kw< TAO_PEGTL_STRING("output") > {};
+    struct kw_wire : kw< TAO_PEGTL_STRING("wire") > {};
+    struct kw_assign : kw< TAO_PEGTL_STRING("assign") > {};
+    struct kw_variant : kw< TAO_PEGTL_STRING("variant") > {};
+    struct kw_invariant : kw< TAO_PEGTL_STRING("invariant") > {};
+    struct kw_model : kw< TAO_PEGTL_STRING("model") > {};
 
-    // Ranges
-    struct lbrack : sym<'['> {}; struct rbrack : sym<']'> {}; struct colon : sym<':'> {};
-    // --- allow [idx] and [msb:lsb] after identifiers ---
+    // ---- numbers
+    struct decimal : plus< digit > {};
+    struct sized_number : seq< decimal, one<'\''>, one<'b','B','o','O','d','D','h','H'>,
+                               plus< sor< xdigit, one<'x','X','z','Z','_'> > > > {};
+    struct unsized_number : seq< decimal, not_at< one<'\''> > > {};
+    struct format_version : decimal {};
+    struct range_bound : decimal {};
+    struct select_bound : decimal {};
+    struct parameter_value : decimal {};
+    struct replication_count : decimal {};
 
-    // If expression is defined later in the file, leave this forward declare:
+    // ---- selects and ranges: [i] or [msb:lsb], constant indices
+    struct select : if_must< lbrack, token< select_bound >, opt< colon, must< token< select_bound > > >, rbrack > {};
+    struct range : if_must< lbrack, token< range_bound >, colon, token< range_bound >, rbrack > {};
+
+    // ---- expressions (KL13: one language everywhere)
+    // Precedence, lowest first:  ->  ?:  |  ^  &  == !=  < <= > >=  + -  unary  primary
     struct expression;
+    struct op_implies : token< string<'-','>'> > {};
+    struct op_or : token< seq< one<'|'>, not_at< one<'|'> > > > {};
+    struct op_xor : token< one<'^'> > {};
+    struct op_and : token< seq< one<'&'>, not_at< one<'&'> > > > {};
+    struct op_equality : token< sor< string<'=','='>, string<'!','='> > > {};
+    struct op_ordered : token< sor< string<'<','='>, string<'>','='>,
+                                     seq< one<'<'>, not_at< one<'<'> > >,
+                                     seq< one<'>'>, not_at< one<'>'> > > > > {};
+    struct op_sum : token< sor< one<'+'>, seq< one<'-'>, not_at< one<'>'> > > > > {};
+    struct op_unary : token< sor< one<'~'>, seq< one<'&'>, not_at< one<'&'> > >,
+                                   seq< one<'|'>, not_at< one<'|'> > >, one<'^'> > > {};
 
-    struct identifier_raw : tao::pegtl::sor< ident_esc, ident_norm > {};
-    // --- identifier selects: allow [idx] and [msb:lsb] in expressions ---
-    struct bit_select      : tao::pegtl::seq< lbrack, number_1, rbrack > {};
-    struct range_slice     : tao::pegtl::seq< lbrack, number_1, sep, colon, sep, number_1, rbrack > {};
-    struct range_or_select : tao::pegtl::sor< range_slice, bit_select > {};
+    struct name_ref : seq< token< signal_name >, opt< select > > {};
+    struct model_ref : if_must< kw_model, lparen, token< model_instance >, dot, token< model_name >, opt< select >, rparen > {};
+    struct expression_list : list_must< expression, comma > {};
+    struct replication : seq< lbrace, token< replication_count >, lbrace, must< expression_list, rbrace, rbrace > > {};
+    struct concatenation : if_must< lbrace, expression_list, rbrace > {};
+    struct parenthesized : if_must< lparen, expression, rparen > {};
+    struct primary : sor< model_ref, replication, concatenation, parenthesized,
+                          token< sized_number >, token< unsized_number >, name_ref > {};
+    struct unary_expr : seq< opt< op_unary >, primary > {};
+    struct sum_expr : seq< unary_expr, star< op_sum, must< unary_expr > > > {};
+    struct ordered_expr : seq< sum_expr, opt< op_ordered, must< sum_expr > > > {};
+    struct equality_expr : seq< ordered_expr, opt< op_equality, must< ordered_expr > > > {};
+    struct and_expr : seq< equality_expr, star< op_and, must< equality_expr > > > {};
+    struct xor_expr : seq< and_expr, star< op_xor, must< and_expr > > > {};
+    struct or_expr : seq< xor_expr, star< op_or, must< xor_expr > > > {};
+    struct choice_expr : seq< or_expr, opt< qmark, must< choice_expr, colon, choice_expr > > > {};
+    struct expression : seq< choice_expr, opt< op_implies, must< choice_expr > > > {};
 
+    // ---- statements
+    struct format_line : if_must< kw_format, token< format_version >, semi > {};
 
-    // zero-or-more selects lets you do foo[3], foo[7:0], foo[i][j], etc.
-    struct identifier : tao::pegtl::seq< identifier_raw, tao::pegtl::star< range_or_select > > {};
+    struct port_list : list_must< token< port_name >, comma > {};
+    struct direction : sor< kw_input, kw_output, kw_wire > {};
+    struct declared_names : list_must< token< declared_name >, comma > {};
+    struct declaration : if_must< direction, opt< range >, declared_names, semi > {};
 
-    // header_port_ident is used in module port lists - it's just an identifier
-    struct header_port_ident : identifier {};
+    struct lvalue;
+    struct lvalue_list : list_must< lvalue, comma > {};
+    struct lvalue : sor< if_must< lbrace, lvalue_list, rbrace >, name_ref > {};
+    struct assigned_expression : expression {};
+    struct assignment : if_must< lvalue, equals, assigned_expression > {};
+    struct assignments : list_must< assignment, comma > {};
+    struct continuous_assign : if_must< kw_assign, assignments, semi > {};
 
-    // Expr (subset)
-    struct lbrace : sym<'{'> {}; struct rbrace : sym<'}'> {};
-    struct lparen : sym<'('> {}; struct rparen : sym<')'> {};
-    struct dot    : sym<'.'> {}; struct comma  : sym<','> {};
-    struct semi   : sym<';'> {}; struct equal  : sym<'='> {};
-    struct expression;
-    struct concat_list;
-    struct concat : seq< lbrace, sep, concat_list, sep, rbrace > {};
-    // identifier already supports zero-or-more selects: foo[3], foo[7:0], foo[i][j]
-    // struct primary_expr : sor< concat, identifier > {};
-    struct primary_expr : sor< concat, number_1, identifier > {};
-    struct expression : primary_expr {};
-    struct concat_list : list_must< expression, seq< sep, comma, sep > > {};
+    struct parameter : if_must< dot, token< parameter_name >, lparen, token< parameter_value >, rparen > {};
+    struct parameter_list : list_must< parameter, comma > {};
+    struct parameters : if_must< hash, lparen, parameter_list, rparen > {};
+    struct variant : if_must< kw_variant, token< variant_name > > {};
+    struct connection : if_must< dot, token< connection_port >, lparen, opt< expression >, rparen > {};
+    struct connections_end : rparen {};
+    struct instantiation : if_must< token< type_name >, opt< parameters >, opt< variant >,
+                                    token< instance_name >, lparen, opt< list_must< connection, comma > >,
+                                    connections_end, semi > {};
 
-    // Ports in header
-    // struct port_list : list< identifier, seq< sep, comma, sep > > {};
-    struct port_list : tao::pegtl::list< header_port_ident, tao::pegtl::seq< sep, comma, sep > > {};
+    struct invariant : if_must< kw_invariant, token< invariant_name >, colon, expression, semi > {};
 
-    // Keywords
-    struct kw_wire   : TAO_PEGTL_STRING("wire") {};
-    // ===== Declarations: width BEFORE name (e.g. "output [7:0] bus, a;") =====
-    struct range_decl     : tao::pegtl::seq< lbrack, number_1, sep, colon, sep, number_1, rbrack > {};
-    struct opt_range_decl : tao::pegtl::opt< tao::pegtl::seq< sep, range_decl, sep > > {};
-    struct variable_name  : identifier_raw {};  // NOTE: raw, no post-selects
-    struct list_of_variables
-      : tao::pegtl::seq<
-	opt_range_decl,
-	tao::pegtl::list_must< variable_name, tao::pegtl::seq< sep, comma, sep > >
-	> {};
-    struct kw_input  : TAO_PEGTL_STRING("input") {};
-    struct kw_output : TAO_PEGTL_STRING("output") {};
-    struct kw_inout  : TAO_PEGTL_STRING("inout") {};
-    struct kw_assign : TAO_PEGTL_STRING("assign") {};
-    struct kw_module : TAO_PEGTL_STRING("module") {};
-    struct kw_endmodule : TAO_PEGTL_STRING("endmodule") {};
-    struct not_keyword : not_at< sor< kw_wire, kw_input, kw_output, kw_inout, kw_assign, kw_module, kw_endmodule > > {};
+    struct module_item : sor< declaration, continuous_assign, invariant, instantiation > {};
+    struct module_end : kw_endmodule {};
+    struct module : if_must< kw_module, token< module_name >, lparen, opt< port_list >, rparen, semi,
+                             star< module_item >, module_end > {};
+    struct more_modules : star< module > {};
+    struct file_end : eof {};
+    struct file : must< sp, format_line, module, more_modules, file_end > {};
 
-    // One or more names, separated by commas.
-    struct net_declaration    : if_must< kw_wire,   seps, list_of_variables, sep, semi > {};
-    struct input_declaration  : if_must< kw_input,  seps, list_of_variables, sep, semi > {};
-    struct output_declaration : if_must< kw_output, seps, list_of_variables, sep, semi > {};
-    struct inout_declaration  : if_must< kw_inout,  seps, list_of_variables, sep, semi > {};
-
-    // assign
-    struct assignment : if_must< expression, sep, equal, sep, expression > {};
-    struct assignment_list : list_must< assignment, seq< sep, comma, sep > > {};
-    struct continuous_assign : if_must< kw_assign, seps, assignment_list, sep, semi > {};
-
-    // instantiation
-    struct module_port_connection : expression {};
-    // capture the named port name BEFORE parsing the expression
-    struct named_port_name : identifier {};
-    struct named_port_connection : if_must< dot, named_port_name, sep, lparen, sep, expression, sep, rparen > {};
-    struct list_of_module_connections : list_must< sor< named_port_connection, module_port_connection >, seq< sep, comma, sep > > {};
-    // split instance name out so actions can grab it before ports overwrite last_identifier
-    struct instance_name_tok : identifier {};
-    struct module_instance : if_must< instance_name_tok, sep, lparen, sep, opt< list_of_module_connections >, sep, rparen > {};
-    struct module_instance_list : list_must< module_instance, seq< sep, comma, sep > > {};
-    struct module_inst_head : identifier {};
-    struct module_instantiation : if_must< not_keyword, module_inst_head, seps, module_instance_list, sep, semi > {};
-
-    // module
-    struct module_header_ports : if_must< lparen, sep, opt< port_list >, sep, rparen > {};
-    struct module_name_tok : identifier {};
-    struct module_header : if_must< kw_module, seps, module_name_tok, sep, opt< module_header_ports >, sep, semi > {};
-    struct module_item : sor< input_declaration, output_declaration, inout_declaration, net_declaration, continuous_assign, module_instantiation > {};
-    struct module : seq< module_header, star< seq< sep, module_item > >, sep, kw_endmodule > {};
-    struct start : star< seq< sep, module, sep > > {};
-
-  }
-} // namespace verilog::grammar
+  } // namespace grammar
+} // namespace verilog

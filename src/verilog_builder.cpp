@@ -67,9 +67,8 @@ namespace verilog {
     
     // Check if it's a keyword
     static const std::vector<std::string> keywords = {
-      "module", "endmodule", "input", "output", "inout", "wire", "assign",
-      "reg", "always", "initial", "begin", "end", "if", "else", "case",
-      "casex", "casez", "default", "for", "while", "repeat", "forever"
+      "kernlist_format", "module", "endmodule", "input", "output", "wire", "assign",
+      "variant", "invariant", "model"
     };
     
     if (std::find(keywords.begin(), keywords.end(), name) != keywords.end()) {
@@ -86,40 +85,43 @@ namespace verilog {
     return "\\" + name + " ";
   }
 
+  // Names are held unescaped in the data model
+  static std::string plain_name(const std::string& name) { return name; }
+
   // ============================================================================
   // Expression Construction
   // ============================================================================
 
   Expr make_identifier(const std::string& name) {
     Identifier id;
-    id.name = escape_identifier(name);
+    id.name = plain_name(name);
     return id;
   }
 
   Expr make_indexed(const std::string& name, int64_t index) {
     IdentifierIndexed ii;
-    ii.name = escape_identifier(name);
+    ii.name = plain_name(name);
     ii.index = make_number(index);
     return ii;
   }
 
   Expr make_indexed(const std::string& name, const Number& index) {
     IdentifierIndexed ii;
-    ii.name = escape_identifier(name);
+    ii.name = plain_name(name);
     ii.index = index;
     return ii;
   }
 
   Expr make_sliced(const std::string& name, int64_t msb, int64_t lsb) {
     IdentifierSliced is;
-    is.name = escape_identifier(name);
+    is.name = plain_name(name);
     is.range = make_range(msb, lsb);
     return is;
   }
 
   Expr make_sliced(const std::string& name, const Range& range) {
     IdentifierSliced is;
-    is.name = escape_identifier(name);
+    is.name = plain_name(name);
     is.range = range;
     return is;
   }
@@ -130,13 +132,50 @@ namespace verilog {
     return concat;
   }
 
+  Expr make_replication(int64_t count, const std::vector<Expr>& elements) {
+    auto r = std::make_shared<Replication>();
+    r->count = make_number(count);
+    r->elements = elements;
+    return r;
+  }
+
+  Expr make_unary(const std::string& op, const Expr& operand) {
+    auto u = std::make_shared<UnaryOp>();
+    u->op = op; u->operand = operand;
+    return u;
+  }
+
+  Expr make_binary(const std::string& op, const Expr& lhs, const Expr& rhs) {
+    auto b = std::make_shared<BinaryOp>();
+    b->op = op; b->lhs = lhs; b->rhs = rhs;
+    return b;
+  }
+
+  Expr make_choice(const Expr& condition, const Expr& if_true, const Expr& if_false) {
+    auto c = std::make_shared<Choice>();
+    c->condition = condition; c->if_true = if_true; c->if_false = if_false;
+    return c;
+  }
+
+  Expr make_model_ref(const std::string& instance, const std::string& name) {
+    ModelRef m; m.instance = instance; m.name = name;
+    return m;
+  }
+
+  void add_invariant(Module& m, const std::string& name, const Expr& expr) {
+    for (const auto& existing : m.invariants) {
+      if (existing.name == name) throw std::invalid_argument("Invariant '" + name + "' already exists in module");
+    }
+    m.invariants.push_back(Invariant{ name, expr, Location{} });
+  }
+
   // ============================================================================
   // Module Construction
   // ============================================================================
 
   Module make_module(const std::string& name) {
     Module m;
-    m.module_name = escape_identifier(name);
+    m.module_name = plain_name(name);
     return m;
   }
 
@@ -153,10 +192,6 @@ namespace verilog {
     for (const auto& decl : m.output_declarations) {
       if (decl.net_name == name) return true;
     }
-    // Check inouts
-    for (const auto& decl : m.inout_declarations) {
-      if (decl.net_name == name) return true;
-    }
     // Check wires
     for (const auto& decl : m.net_declarations) {
       if (decl.net_name == name) return true;
@@ -169,7 +204,7 @@ namespace verilog {
   // ============================================================================
 
   void add_input(Module& m, const std::string& name, std::optional<Range> range) {
-    std::string escaped_name = escape_identifier(name);
+    std::string escaped_name = plain_name(name);
     
     if (signal_exists_in_module(m, escaped_name)) {
       throw std::invalid_argument("Signal '" + name + "' already exists in module");
@@ -184,7 +219,7 @@ namespace verilog {
   }
 
   void add_output(Module& m, const std::string& name, std::optional<Range> range) {
-    std::string escaped_name = escape_identifier(name);
+    std::string escaped_name = plain_name(name);
     
     if (signal_exists_in_module(m, escaped_name)) {
       throw std::invalid_argument("Signal '" + name + "' already exists in module");
@@ -198,23 +233,8 @@ namespace verilog {
     m.port_list.push_back(escaped_name);
   }
 
-  void add_inout(Module& m, const std::string& name, std::optional<Range> range) {
-    std::string escaped_name = escape_identifier(name);
-    
-    if (signal_exists_in_module(m, escaped_name)) {
-      throw std::invalid_argument("Signal '" + name + "' already exists in module");
-    }
-    
-    InoutDeclaration decl;
-    decl.net_name = escaped_name;
-    decl.range = range;
-    
-    m.inout_declarations.push_back(decl);
-    m.port_list.push_back(escaped_name);
-  }
-
   void add_wire(Module& m, const std::string& name, std::optional<Range> range) {
-    std::string escaped_name = escape_identifier(name);
+    std::string escaped_name = plain_name(name);
     
     if (signal_exists_in_module(m, escaped_name)) {
       throw std::invalid_argument("Signal '" + name + "' already exists in module");
@@ -255,12 +275,12 @@ namespace verilog {
   ModuleInstance make_instance(
 			       const std::string& module_name,
 			       const std::string& instance_name,
-			       const std::vector<Expr>& positional_ports
+			       const std::vector<Connection>& connections
 			       ) {
     ModuleInstance inst;
-    inst.module_name = escape_identifier(module_name);
-    inst.instance_name = escape_identifier(instance_name);
-    inst.ports_pos = positional_ports;
+    inst.module_name = plain_name(module_name);
+    inst.instance_name = plain_name(instance_name);
+    inst.connections = connections;
     return inst;
   }
 
@@ -270,9 +290,9 @@ namespace verilog {
 				     const std::map<std::string, Expr>& named_ports
 				     ) {
     ModuleInstance inst;
-    inst.module_name = escape_identifier(module_name);
-    inst.instance_name = escape_identifier(instance_name);
-    inst.ports_named = named_ports;
+    inst.module_name = plain_name(module_name);
+    inst.instance_name = plain_name(instance_name);
+    for (const auto& [port, expr] : named_ports) inst.connections.push_back(Connection{ port, expr });
     return inst;
   }
 
@@ -281,7 +301,7 @@ namespace verilog {
   // ============================================================================
 
   bool remove_input(Module& m, const std::string& name) {
-    std::string escaped_name = escape_identifier(name);
+    std::string escaped_name = plain_name(name);
     
     auto it = std::remove_if(m.input_declarations.begin(), m.input_declarations.end(),
 			     [&escaped_name](const InputDeclaration& decl) { return decl.net_name == escaped_name; });
@@ -295,7 +315,7 @@ namespace verilog {
   }
 
   bool remove_output(Module& m, const std::string& name) {
-    std::string escaped_name = escape_identifier(name);
+    std::string escaped_name = plain_name(name);
     
     auto it = std::remove_if(m.output_declarations.begin(), m.output_declarations.end(),
 			     [&escaped_name](const OutputDeclaration& decl) { return decl.net_name == escaped_name; });
@@ -308,22 +328,8 @@ namespace verilog {
     return false;
   }
 
-  bool remove_inout(Module& m, const std::string& name) {
-    std::string escaped_name = escape_identifier(name);
-    
-    auto it = std::remove_if(m.inout_declarations.begin(), m.inout_declarations.end(),
-			     [&escaped_name](const InoutDeclaration& decl) { return decl.net_name == escaped_name; });
-    
-    if (it != m.inout_declarations.end()) {
-      m.inout_declarations.erase(it, m.inout_declarations.end());
-      remove_from_port_list(m, name);
-      return true;
-    }
-    return false;
-  }
-
   bool remove_wire(Module& m, const std::string& name) {
-    std::string escaped_name = escape_identifier(name);
+    std::string escaped_name = plain_name(name);
     
     auto it = std::remove_if(m.net_declarations.begin(), m.net_declarations.end(),
 			     [&escaped_name](const NetDeclaration& decl) { return decl.net_name == escaped_name; });
@@ -336,7 +342,7 @@ namespace verilog {
   }
 
   bool remove_instance(Module& m, const std::string& instance_name) {
-    std::string escaped_name = escape_identifier(instance_name);
+    std::string escaped_name = plain_name(instance_name);
     
     auto it = std::remove_if(m.module_instances.begin(), m.module_instances.end(),
 			     [&escaped_name](const ModuleInstance& inst) { return inst.instance_name == escaped_name; });
@@ -349,7 +355,7 @@ namespace verilog {
   }
 
   bool remove_from_port_list(Module& m, const std::string& name) {
-    std::string escaped_name = escape_identifier(name);
+    std::string escaped_name = plain_name(name);
     
     auto it = std::find(m.port_list.begin(), m.port_list.end(), escaped_name);
     if (it != m.port_list.end()) {
@@ -364,7 +370,7 @@ namespace verilog {
   // ============================================================================
 
   bool has_port(const Module& m, const std::string& name) {
-    std::string escaped_name = escape_identifier(name);
+    std::string escaped_name = plain_name(name);
     
     for (const auto& decl : m.input_declarations) {
       if (decl.net_name == escaped_name) return true;
@@ -372,14 +378,11 @@ namespace verilog {
     for (const auto& decl : m.output_declarations) {
       if (decl.net_name == escaped_name) return true;
     }
-    for (const auto& decl : m.inout_declarations) {
-      if (decl.net_name == escaped_name) return true;
-    }
     return false;
   }
 
   bool has_wire(const Module& m, const std::string& name) {
-    std::string escaped_name = escape_identifier(name);
+    std::string escaped_name = plain_name(name);
     
     for (const auto& decl : m.net_declarations) {
       if (decl.net_name == escaped_name) return true;
@@ -392,7 +395,7 @@ namespace verilog {
   }
 
   const ModuleInstance* find_instance(const Module& m, const std::string& instance_name) {
-    std::string escaped_name = escape_identifier(instance_name);
+    std::string escaped_name = plain_name(instance_name);
     
     for (const auto& inst : m.module_instances) {
       if (inst.instance_name == escaped_name) {
@@ -403,7 +406,7 @@ namespace verilog {
   }
 
   std::vector<const ModuleInstance*> find_instances_of_type(const Module& m, const std::string& module_type) {
-    std::string escaped_type = escape_identifier(module_type);
+    std::string escaped_type = plain_name(module_type);
     std::vector<const ModuleInstance*> result;
     
     for (const auto& inst : m.module_instances) {
@@ -430,7 +433,7 @@ namespace verilog {
   }
 
   const Module* find_module(const Netlist& nl, const std::string& module_name) {
-    std::string escaped_name = escape_identifier(module_name);
+    std::string escaped_name = plain_name(module_name);
     
     for (const auto& mod : nl.modules) {
       if (mod.module_name == escaped_name) {
@@ -441,7 +444,7 @@ namespace verilog {
   }
 
   Module* find_module(Netlist& nl, const std::string& module_name) {
-    std::string escaped_name = escape_identifier(module_name);
+    std::string escaped_name = plain_name(module_name);
     
     for (auto& mod : nl.modules) {
       if (mod.module_name == escaped_name) {

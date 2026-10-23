@@ -5,8 +5,20 @@
 
 using namespace verilog;
 
+// The connection to a port, by name; nullptr if there is none
+static const Connection* conn(const ModuleInstance& inst, const std::string& port) {
+  for (const auto& c : inst.connections) if (c.port == port) return &c;
+  return nullptr;
+}
+
+static std::string id_of(const Expr& e) {
+  if (std::holds_alternative<Identifier>(e)) return std::get<Identifier>(e).name;
+  return expr_to_string(e);
+}
+
 TEST(Parse, SimpleModule) {
   std::string data = R"(
+kernlist_format 1;
 module top(a,b,c,d);
   input a, b;
   output c, d;
@@ -15,6 +27,7 @@ module top(a,b,c,d);
 endmodule
 )";
   auto nl = parse_string(data);
+  EXPECT_EQ(nl.format_version, 1);
   ASSERT_EQ(nl.modules.size(), 1u);
   const auto& m = nl.modules[0];
   EXPECT_EQ(m.module_name, "top");
@@ -27,465 +40,275 @@ endmodule
   EXPECT_EQ(m.output_declarations[1].net_name, "d");
   EXPECT_EQ(m.net_declarations.size(), 1u);
   EXPECT_EQ(m.assignments.size(), 1u);
+  // locations: line 3 is the module, line 6 the wire, line 7 the assign
+  EXPECT_EQ(m.location.line, 3);
+  EXPECT_EQ(m.net_declarations[0].location.line, 6);
+  EXPECT_EQ(m.assignments[0].location.line, 7);
 }
 
-TEST(Parse, InoutPort) {
-  std::string data = R"(
-module test(A);
-  inout A;
-endmodule
-)";
-  auto nl = parse_string(data);
-  ASSERT_EQ(nl.modules.size(), 1u);
-  const auto& m = nl.modules[0];
-  ASSERT_EQ(m.inout_declarations.size(), 1u);
-  EXPECT_EQ(m.inout_declarations[0].net_name, "A");
+TEST(Parse, FormatLineRequired) {
+  EXPECT_THROW(parse_string("module m(); endmodule"), parse_error);
+  try {
+    parse_string("\nmodule m(); endmodule");
+    FAIL();
+  } catch (const parse_error& e) {
+    EXPECT_EQ(e.line, 2);
+    EXPECT_NE(std::string(e.what()).find("kernlist_format"), std::string::npos);
+  }
+}
+
+TEST(Parse, FormatVersionRead) {
+  // The reader reads any version; checking refuses versions it does not know (KL03)
+  auto nl = parse_string("kernlist_format 2; module m(); endmodule");
+  EXPECT_EQ(nl.format_version, 2);
+}
+
+TEST(Parse, InoutRejected) {
+  EXPECT_THROW(parse_string("kernlist_format 1;\nmodule test(A);\n  inout A;\nendmodule\n"), parse_error);
 }
 
 TEST(Parse, EscapedNames) {
   std::string data = R"(
-module top(a,\b_$123,c,d);
-  input a, \b_$123;
-  output c, d;
+kernlist_format 1;
+module top(a,\b_$123 ,c,\in.d );
+  input a, \b_$123 ;
+  output c, \in.d ;
 endmodule
 )";
   auto nl = parse_string(data);
   ASSERT_EQ(nl.modules.size(), 1u);
   const auto& m = nl.modules[0];
-  EXPECT_EQ(m.module_name, "top");
   EXPECT_EQ(m.port_list.size(), 4u);
-  EXPECT_EQ(m.input_declarations.size(), 2u);
-  EXPECT_EQ(m.input_declarations[0].net_name, "a");
   EXPECT_EQ(m.input_declarations[1].net_name, "b_$123");
-  EXPECT_EQ(m.output_declarations.size(), 2u);
-  EXPECT_EQ(m.output_declarations[0].net_name, "c");
-  EXPECT_EQ(m.output_declarations[1].net_name, "d");
+  EXPECT_EQ(m.output_declarations[1].net_name, "in.d");
 }
 
-// begin new stuff
-// Test cases for number literals and concatenations in assignments
+TEST(Parse, KeywordsAreNotNames) {
+  EXPECT_THROW(parse_string("kernlist_format 1; module m(); wire variant; endmodule"), parse_error);
+  EXPECT_THROW(parse_string("kernlist_format 1; module m(); wire model; endmodule"), parse_error);
+  // but names that start with a keyword are names
+  auto nl = parse_string("kernlist_format 1; module m(); wire variant_x, model_y; endmodule");
+  EXPECT_EQ(nl.modules[0].net_declarations.size(), 2u);
+}
 
-TEST(Parse, NumberWithXValue) {
+TEST(Parse, NumbersAndConcatenation) {
   std::string data = R"(
-module test1;
-  wire [1:0] a;
-  assign a = 2'hx;
+kernlist_format 1;
+module test4();
+  wire [3:0] a, b;
+  wire [1:0] c;
+  assign a = {2'h0, 2'hx}, b = {c, 2'b01};
 endmodule
 )";
   auto nl = parse_string(data);
-  ASSERT_EQ(nl.modules.size(), 1u);
   const auto& m = nl.modules[0];
-  EXPECT_EQ(m.module_name, "test1");
-  
-  // Check wire declaration
-  ASSERT_EQ(m.net_declarations.size(), 1u);
-  EXPECT_EQ(m.net_declarations[0].net_name, "a");
   ASSERT_TRUE(m.net_declarations[0].range.has_value());
-  EXPECT_EQ(m.net_declarations[0].range.value().start.as_integer(), 1);
-  EXPECT_EQ(m.net_declarations[0].range.value().end.as_integer(), 0);
-  
-  // Check assignment: a = 2'hx
+  EXPECT_EQ(m.net_declarations[0].range->start.as_integer(), 3);
+  EXPECT_EQ(m.net_declarations[0].range->end.as_integer(), 0);
   ASSERT_EQ(m.assignments.size(), 1u);
-  ASSERT_EQ(m.assignments[0].assignments.size(), 1u);
-  const auto& assign = m.assignments[0].assignments[0];
-  
-  // LHS should be identifier "a"
-  ASSERT_TRUE(std::holds_alternative<verilog::Identifier>(assign.first));
-  EXPECT_EQ(std::get<verilog::Identifier>(assign.first).name, "a");
-  
-  // RHS should be a number literal "2'hx"
-  ASSERT_TRUE(std::holds_alternative<verilog::Number>(assign.second));
-  // The exact value/representation depends on how your Number type stores it
+  ASSERT_EQ(m.assignments[0].assignments.size(), 2u);
+  const auto& rhs = m.assignments[0].assignments[0].second;
+  ASSERT_TRUE(std::holds_alternative<std::shared_ptr<Concatenation>>(rhs));
+  const auto& c = std::get<std::shared_ptr<Concatenation>>(rhs);
+  ASSERT_EQ(c->elements.size(), 2u);
+  ASSERT_TRUE(std::holds_alternative<Number>(c->elements[1]));
+  const auto& n = std::get<Number>(c->elements[1]);
+  EXPECT_EQ(n.length.value(), 2);
+  EXPECT_EQ(n.base.value(), 'h');
+  EXPECT_EQ(n.mantissa, "x");
 }
-
-TEST(Parse, ConcatenationOnRHS) {
-  std::string data = R"(
-module test2;
-  wire [3:0] a, b, c;
-  assign a = {b, c};
-endmodule
-)";
-  auto nl = parse_string(data);
-  ASSERT_EQ(nl.modules.size(), 1u);
-  const auto& m = nl.modules[0];
-  EXPECT_EQ(m.module_name, "test2");
-  
-  // Check wire declarations
-  ASSERT_EQ(m.net_declarations.size(), 3u);
-  EXPECT_EQ(m.net_declarations[0].net_name, "a");
-  EXPECT_EQ(m.net_declarations[1].net_name, "b");
-  EXPECT_EQ(m.net_declarations[2].net_name, "c");
-  
-  // Check assignment: a = {b, c}
-  ASSERT_EQ(m.assignments.size(), 1u);
-  ASSERT_EQ(m.assignments[0].assignments.size(), 1u);
-  const auto& assign = m.assignments[0].assignments[0];
-  
-  // LHS should be identifier "a"
-  ASSERT_TRUE(std::holds_alternative<verilog::Identifier>(assign.first));
-  EXPECT_EQ(std::get<verilog::Identifier>(assign.first).name, "a");
-  
-  // RHS should be a concatenation containing "b" and "c"
-  ASSERT_TRUE(std::holds_alternative<std::shared_ptr<verilog::Concatenation>>(assign.second));
-  const auto& concat_ptr = std::get<std::shared_ptr<verilog::Concatenation>>(assign.second);
-  ASSERT_NE(concat_ptr, nullptr);
-  ASSERT_EQ(concat_ptr->elements.size(), 2u);
-  ASSERT_TRUE(std::holds_alternative<verilog::Identifier>(concat_ptr->elements[0]));
-  EXPECT_EQ(std::get<verilog::Identifier>(concat_ptr->elements[0]).name, "b");
-  ASSERT_TRUE(std::holds_alternative<verilog::Identifier>(concat_ptr->elements[1]));
-  EXPECT_EQ(std::get<verilog::Identifier>(concat_ptr->elements[1]).name, "c");
-}
-
-TEST(Parse, NumbersInConcatenation) {
-  std::string data = R"(
-module test4;
-  wire [3:0] a;
-  assign a = {2'h0, 2'hx};
-endmodule
-)";
-  auto nl = parse_string(data);
-  ASSERT_EQ(nl.modules.size(), 1u);
-  const auto& m = nl.modules[0];
-  EXPECT_EQ(m.module_name, "test4");
-  
-  // Check wire declaration
-  ASSERT_EQ(m.net_declarations.size(), 1u);
-  EXPECT_EQ(m.net_declarations[0].net_name, "a");
-  ASSERT_TRUE(m.net_declarations[0].range.has_value());
-  EXPECT_EQ(m.net_declarations[0].range.value().start.as_integer(), 3);
-  EXPECT_EQ(m.net_declarations[0].range.value().end.as_integer(), 0);
-  
-  // Check assignment: a = {2'h0, 2'hx}
-  ASSERT_EQ(m.assignments.size(), 1u);
-  ASSERT_EQ(m.assignments[0].assignments.size(), 1u);
-  const auto& assign = m.assignments[0].assignments[0];
-  
-  // LHS should be identifier "a"
-  ASSERT_TRUE(std::holds_alternative<verilog::Identifier>(assign.first));
-  EXPECT_EQ(std::get<verilog::Identifier>(assign.first).name, "a");
-  
-  // RHS should be a concatenation containing two number literals
-  ASSERT_TRUE(std::holds_alternative<std::shared_ptr<verilog::Concatenation>>(assign.second));
-  const auto& concat_ptr = std::get<std::shared_ptr<verilog::Concatenation>>(assign.second);
-  ASSERT_NE(concat_ptr, nullptr);
-  ASSERT_EQ(concat_ptr->elements.size(), 2u);
-  ASSERT_TRUE(std::holds_alternative<verilog::Number>(concat_ptr->elements[0]));
-  ASSERT_TRUE(std::holds_alternative<verilog::Number>(concat_ptr->elements[1]));
-  // The exact values depend on how your Number type stores "2'h0" and "2'hx"
-}
-// End new stuff
-
 
 TEST(Parse, Comments) {
   std::string data = R"(
-module test(a,b);
+// before the format line
+/* also before */ kernlist_format 1; // after
+module /*blk*/ test ( /*h*/ a /*h*/, b ) /*blk*/ ;
   // single line comment
-  /* block comment */ wire w1; (* attribute-ish comment *)
-  input a;
+  /* block comment */ wire w1; /* another */
+  input /*c*/ a /*c*/ ;
   output b;
+  assign /*A*/ b /*B*/ = /*C*/ a /*D*/ ;
 endmodule
 )";
   auto nl = parse_string(data);
-  ASSERT_EQ(nl.modules.size(), 1u);
   const auto& m = nl.modules[0];
+  EXPECT_EQ(m.port_list.size(), 2u);
   EXPECT_EQ(m.net_declarations.size(), 1u);
   EXPECT_EQ(m.input_declarations.size(), 1u);
   EXPECT_EQ(m.output_declarations.size(), 1u);
+  EXPECT_EQ(id_of(m.assignments[0].assignments[0].second), "a");
+}
+
+TEST(Parse, AttributesAreNotComments) {
+  // veriloglib read (* ... *) as a comment; the kernlist format has no attributes
+  EXPECT_THROW(parse_string("kernlist_format 1; module m(); (* keep *) wire w; endmodule"), parse_error);
+}
+
+TEST(Parse, UnclosedComment) {
+  EXPECT_THROW(parse_string("kernlist_format 1; module m(); /* wire w; endmodule"), parse_error);
 }
 
 TEST(Parse, Instantiation) {
   std::string data = R"(
-module leaf(x,y);
+kernlist_format 1;
+module leaf(x, y);
   input x; output y;
 endmodule
 
-module top(a,b);
+module top(a, b);
+  input a; output b;
   wire n1;
-  leaf u0 (a, n1);
   leaf u1 (.x(n1), .y(b));
+  leaf u2 (.x(a), .y());
+  leaf u3 ();
 endmodule
 )";
   auto nl = parse_string(data);
   ASSERT_EQ(nl.modules.size(), 2u);
-  // const auto& top = nl.modules[1];
-  // EXPECT_EQ(top.module_instances.size(), 2u);
   const auto& top = nl.modules[1];
-  ASSERT_EQ(top.module_instances.size(), 2u);
-
-  // ---- u0: positional connections (a, n1)
-  {
-    const auto& u0 = top.module_instances[0];
-    EXPECT_EQ(u0.module_name, "leaf");
-    EXPECT_EQ(u0.instance_name, "u0");
-    ASSERT_EQ(u0.ports_pos.size(), 2u);
-    // ports_named should be empty for positional style
-    EXPECT_TRUE(u0.ports_named.empty());
-
-    // Helper to get identifier string from Expr
-    auto id_of = [](const Expr& e) -> std::string {
-      if (std::holds_alternative<Identifier>(e)) {
-        return std::get<Identifier>(e).name;
-      }
-      return expr_to_string(e);
-    };
-
-    EXPECT_EQ(id_of(u0.ports_pos[0]), "a");
-    EXPECT_EQ(id_of(u0.ports_pos[1]), "n1");
-  }
-
-  // ---- u1: named connections (.x(n1), .y(b))
-  {
-    const auto& u1 = top.module_instances[1];
-    EXPECT_EQ(u1.module_name, "leaf");
-    EXPECT_EQ(u1.instance_name, "u1");
-    // positional list should be empty for named style
-    EXPECT_TRUE(u1.ports_pos.empty());
-    ASSERT_EQ(u1.ports_named.size(), 2u);
-
-    auto id_of = [](const Expr& e) -> std::string {
-      if (std::holds_alternative<Identifier>(e)) return std::get<Identifier>(e).name;
-      return expr_to_string(e);
-    };
-
-    ASSERT_TRUE(u1.ports_named.count("x"));
-    ASSERT_TRUE(u1.ports_named.count("y"));
-    EXPECT_EQ(id_of(u1.ports_named.at("x")), "n1");
-    EXPECT_EQ(id_of(u1.ports_named.at("y")), "b");
-  }
+  ASSERT_EQ(top.module_instances.size(), 3u);
+  const auto& u1 = top.module_instances[0];
+  EXPECT_EQ(u1.module_name, "leaf");
+  EXPECT_EQ(u1.instance_name, "u1");
+  EXPECT_TRUE(u1.parameters.empty());
+  EXPECT_FALSE(u1.variant.has_value());
+  ASSERT_EQ(u1.connections.size(), 2u);
+  EXPECT_EQ(u1.connections[0].port, "x");          // in the order written
+  EXPECT_EQ(id_of(*conn(u1, "x")->expr), "n1");
+  EXPECT_EQ(id_of(*conn(u1, "y")->expr), "b");
+  const auto& u2 = top.module_instances[1];
+  ASSERT_NE(conn(u2, "y"), nullptr);
+  EXPECT_FALSE(conn(u2, "y")->expr.has_value());   // left unconnected
+  EXPECT_TRUE(top.module_instances[2].connections.empty());
+  EXPECT_EQ(u1.location.line, 10);
 }
 
-TEST(Parse, CommentsEverywhere) {
-  using namespace verilog;
-  const char* data = R"(
-    // Leaf with comments sprinkled in
-    module /*blk*/ leaf ( /*h*/ x /*h*/, y /*h*/ ) /*blk*/ ;
-      input  /*c*/ x /*c*/ ;
-      output /*c*/ y /*c*/ ;
-    endmodule
+TEST(Parse, PositionalConnectionsRejected) {
+  EXPECT_THROW(parse_string("kernlist_format 1; module m(a); input a; leaf u0 (a); endmodule"), parse_error);
+}
 
-    // Top with comments between every symbol we can think of
-    module (* keep = "true" *) top /*mod*/ ( /*h1*/ a /*c*/, /*h2*/ b , c /*tr*/ ) /*trail*/ ;
-      // Declarations with comments around tokens and punctuation
-      input  /*ix*/ a /*ix*/ ;
-      output /*ox*/ c /*ox*/ ;
-      wire   /*wx1*/ n1 /*wx2*/ ;
-
-      // Continuous assign with comments between lhs, '=', and rhs
-      assign /*A*/ c /*B*/ = /*C*/ a /*D*/ ;
-
-      // Positional instantiation with comments around parens/commas
-      leaf /*t*/ u0 /*id*/ ( /*lp*/ a /*,*/ , /*between*/ n1 /*rp*/ ) /*after*/ ;
-
-      // Named instantiation; comments before dot/inside parens + attribute block
-      leaf u1 ( .x ( (*attr*) n1 ) , .y ( /* y comment */ c ) ) ;
-    endmodule
-  )";
-
+TEST(Parse, ParametersAndVariant) {
+  std::string data = R"(
+kernlist_format 1;
+module top();
+  fifo #(.DEPTH(2), .W(8)) variant circular_buffer requests_0 (.enqValid(1'b0));
+  fifo #(.DEPTH(4), .W(8)) requests_1 ();
+  probe variant passive watch ();
+endmodule
+)";
   auto nl = parse_string(data);
-  ASSERT_EQ(nl.modules.size(), 2u);
-
-  const Module& top = nl.modules[1];
-  EXPECT_EQ(top.module_name, "top");
-
-  // Header port list should be intact despite comments.
-  ASSERT_EQ(top.port_list.size(), 3u);
-  EXPECT_EQ(top.port_list[0], "a");
-  EXPECT_EQ(top.port_list[1], "b");
-  EXPECT_EQ(top.port_list[2], "c");
-
-  // Declarations: one statement each in this subset implementation
-  ASSERT_EQ(top.input_declarations.size(), 1u);
-  EXPECT_EQ(top.input_declarations[0].net_name, "a");
-
-  ASSERT_EQ(top.output_declarations.size(), 1u);
-  EXPECT_EQ(top.output_declarations[0].net_name, "c");
-
-  ASSERT_EQ(top.net_declarations.size(), 1u);
-  EXPECT_EQ(top.net_declarations[0].net_name, "n1");
-
-  // Continuous assignment captured
-  ASSERT_EQ(top.assignments.size(), 1u);
-  ASSERT_EQ(top.assignments[0].assignments.size(), 1u);
-  auto id_of = [](const Expr& e) -> std::string {
-    if (std::holds_alternative<Identifier>(e)) return std::get<Identifier>(e).name;
-    return ""; // subset test only expects simple identifiers
-  };
-  EXPECT_EQ(id_of(top.assignments[0].assignments[0].first),  "c");
-  EXPECT_EQ(id_of(top.assignments[0].assignments[0].second), "a");
-
-  // Instantiations survived comment soup
-  ASSERT_EQ(top.module_instances.size(), 2u);
-
-  // u0: positional
-  {
-    const auto& u0 = top.module_instances[0];
-    EXPECT_EQ(u0.module_name,  "leaf");
-    EXPECT_EQ(u0.instance_name,"u0");
-    ASSERT_EQ(u0.ports_pos.size(), 2u);
-    EXPECT_TRUE(u0.ports_named.empty());
-    EXPECT_EQ(id_of(u0.ports_pos[0]), "a");
-    EXPECT_EQ(id_of(u0.ports_pos[1]), "n1");
-  }
-
-  // u1: named
-  {
-    const auto& u1 = top.module_instances[1];
-    EXPECT_EQ(u1.module_name,  "leaf");
-    EXPECT_EQ(u1.instance_name,"u1");
-    EXPECT_TRUE(u1.ports_pos.empty());
-    ASSERT_EQ(u1.ports_named.size(), 2u);
-    ASSERT_TRUE(u1.ports_named.count("x"));
-    ASSERT_TRUE(u1.ports_named.count("y"));
-    EXPECT_EQ(id_of(u1.ports_named.at("x")), "n1");
-    EXPECT_EQ(id_of(u1.ports_named.at("y")), "c");
-  }
+  const auto& insts = nl.modules[0].module_instances;
+  ASSERT_EQ(insts.size(), 3u);
+  ASSERT_EQ(insts[0].parameters.size(), 2u);
+  EXPECT_EQ(insts[0].parameters[0].name, "DEPTH");
+  EXPECT_EQ(insts[0].parameters[0].value, 2);
+  EXPECT_EQ(insts[0].parameters[1].name, "W");
+  EXPECT_EQ(insts[0].parameters[1].value, 8);
+  EXPECT_EQ(insts[0].variant.value(), "circular_buffer");
+  EXPECT_EQ(insts[0].instance_name, "requests_0");
+  EXPECT_FALSE(insts[1].variant.has_value());
+  EXPECT_TRUE(insts[2].parameters.empty());
+  EXPECT_EQ(insts[2].variant.value(), "passive");
 }
 
-TEST(Parse, InstantiationIndexedPort) {
-  using namespace verilog;
-  const char* data = R"(
-    module INVx1_ASAP7_6t_L (A, Y);
-      input A; output Y;
-    endmodule
+TEST(Parse, VariantErrors) {
+  // variant without a name: the instance name is then missing
+  EXPECT_THROW(parse_string("kernlist_format 1; module m(); sink #(.W(1)) variant consume (); endmodule"), parse_error);
+  // variant before the parameters
+  EXPECT_THROW(parse_string("kernlist_format 1; module m(); sink variant plain #(.W(8)) consume (); endmodule"), parse_error);
+  // a parameter that is not a decimal number, or not by name
+  EXPECT_THROW(parse_string("kernlist_format 1; module m(); sink #(.W(N)) consume (); endmodule"), parse_error);
+  EXPECT_THROW(parse_string("kernlist_format 1; module m(); sink #(8) consume (); endmodule"), parse_error);
+}
 
-    module top(_04_, counter_out);
-      input  _04_;
-      output [1:0] counter_out;
-
-      // This was the problematic case: named port connected to bit-select
-      INVx1_ASAP7_6t_L _21_ (
-        .A(_04_),
-        .Y(counter_out[1])
-      );
-    endmodule
-  )";
-
+TEST(Parse, Selects) {
+  std::string data = R"(
+kernlist_format 1;
+module top(sig, bus, counter_out);
+  input sig;
+  input [7:0] bus;
+  output [1:0] counter_out;
+  BUF2 u0 (.A(sig), .Y(counter_out[1]), .Z(bus[7:4]));
+endmodule
+)";
   auto nl = parse_string(data);
-  ASSERT_GE(nl.modules.size(), 2u);
-  const auto& top = nl.modules[1];
-  ASSERT_EQ(top.module_name, "top");
-  ASSERT_EQ(top.module_instances.size(), 1u);
+  const auto& u0 = nl.modules[0].module_instances[0];
+  const Expr& y = *conn(u0, "Y")->expr;
+  ASSERT_TRUE(std::holds_alternative<IdentifierIndexed>(y));
+  EXPECT_EQ(std::get<IdentifierIndexed>(y).name, "counter_out");
+  EXPECT_EQ(std::get<IdentifierIndexed>(y).index.as_integer(), 1);
+  const Expr& z = *conn(u0, "Z")->expr;
+  ASSERT_TRUE(std::holds_alternative<IdentifierSliced>(z));
+  EXPECT_EQ(std::get<IdentifierSliced>(z).range.start.as_integer(), 7);
+  EXPECT_EQ(std::get<IdentifierSliced>(z).range.end.as_integer(), 4);
+}
 
-  const auto& inst = top.module_instances[0];
-  EXPECT_EQ(inst.module_name,  "INVx1_ASAP7_6t_L");
-  EXPECT_EQ(inst.instance_name, "_21_");
+// The expression as the writer prints it, with all parentheses that show grouping
+static std::string grouped(const Expr& e) {
+  if (auto b = std::get_if<std::shared_ptr<BinaryOp>>(&e))
+    return "(" + grouped((*b)->lhs) + " " + (*b)->op + " " + grouped((*b)->rhs) + ")";
+  if (auto u = std::get_if<std::shared_ptr<UnaryOp>>(&e))
+    return "(" + (*u)->op + grouped((*u)->operand) + ")";
+  if (auto c = std::get_if<std::shared_ptr<Choice>>(&e))
+    return "(" + grouped((*c)->condition) + " ? " + grouped((*c)->if_true) + " : " + grouped((*c)->if_false) + ")";
+  return expr_to_string(e);
+}
 
-  // A is simple identifier; Y should be IdentifierIndexed("counter_out", 1)
-  ASSERT_TRUE(inst.ports_pos.empty());
-  ASSERT_EQ(inst.ports_named.size(), 2u);
-  ASSERT_TRUE(inst.ports_named.count("A"));
-  ASSERT_TRUE(inst.ports_named.count("Y"));
+static std::string read_rhs(const std::string& rhs) {
+  auto nl = parse_string("kernlist_format 1; module m(); assign y = " + rhs + "; endmodule");
+  return grouped(nl.modules[0].assignments[0].assignments[0].second);
+}
 
-  // Check .A(_04_)
-  {
-    const Expr& a = inst.ports_named.at("A");
-    ASSERT_TRUE(std::holds_alternative<Identifier>(a));
-    EXPECT_EQ(std::get<Identifier>(a).name, "_04_");
-  }
-  // Check .Y(counter_out[1])
-  {
-    const Expr& y = inst.ports_named.at("Y");
-    if (std::holds_alternative<IdentifierIndexed>(y)) {
-      const auto& yi = std::get<IdentifierIndexed>(y);
-      EXPECT_EQ(yi.name, "counter_out");
-      EXPECT_EQ(yi.index.as_integer(), 1);
-    } else {
-      // Provide a helpful failure if the variant isn't what we expect
-      ADD_FAILURE() << "Expected IdentifierIndexed for .Y, got: " << expr_to_string(y);
-    }
+TEST(Parse, OperatorPrecedence) {
+  EXPECT_EQ(read_rhs("a | b ^ c & d"), "(a | (b ^ (c & d)))");
+  EXPECT_EQ(read_rhs("a & b == c"), "(a & (b == c))");
+  EXPECT_EQ(read_rhs("a == b + c"), "(a == (b + c))");
+  EXPECT_EQ(read_rhs("a < b + 1"), "(a < (b + 1))");
+  EXPECT_EQ(read_rhs("a - b - c"), "((a - b) - c)");
+  EXPECT_EQ(read_rhs("c ? a | b : d"), "(c ? (a | b) : d)");
+  EXPECT_EQ(read_rhs("a -> b == 2'd3"), "(a -> (b == 2'd3))");
+  EXPECT_EQ(read_rhs("~a & &b"), "((~a) & (&b))");
+  EXPECT_EQ(read_rhs("(a | b) & c"), "((a | b) & c)");
+  EXPECT_EQ(read_rhs("{2{a, b[1:0]}}"), "{2{a, b[1:0]}}");
+  EXPECT_EQ(read_rhs("model(credits.taken) + 1"), "(model(credits.taken) + 1)");
+  EXPECT_EQ(read_rhs("a->b"), "(a -> b)");
+}
+
+TEST(Parse, OperatorsNotInTheFormat) {
+  // Forms in no part of the format are syntax errors (KL13)
+  for (const char* rhs : { "a && b", "a || b", "a << 1", "a >> 1", "a * b", "~&a", "a === b", "a -> b -> c" }) {
+    EXPECT_THROW(read_rhs(rhs), parse_error) << rhs;
   }
 }
 
-// helper to check variant structurally (no stringification)
-static bool is_slice_structural(const Expr& e, const char* base, int msb, int lsb) {
-    if (auto p = std::get_if<IdentifierSliced>(&e)) {
-        return p->name == base &&
-               p->range.start.as_integer() == msb &&
-               p->range.end.as_integer()   == lsb;
-    }
-    return false;
-}
-TEST(Parse, InstantiationBitSelectAndSlice) {
-  using namespace verilog;
-
-  const char* data = R"(
-    // Leaf takes two ports
-    module BUF2 (A, Y);
-      input A; output Y;
-    endmodule
-
-    module top(sig, bus, counter_out);
-      input  sig;
-      output [7:0] bus;
-      output [1:0] counter_out;
-
-      // Named: bit-select on output, simple ident on input
-      BUF2 u0 (
-        .A(sig),
-        .Y(counter_out[1])
-      );
-
-      // Positional: slice on second arg (just to ensure slices are also handled)
-      BUF2 u1 ( sig, bus[7:0] );
-    endmodule
-  )";
-
+TEST(Parse, Invariants) {
+  std::string data = R"(
+kernlist_format 1;
+module m(take);
+  input take;
+  wire available;
+  invariant implication: take -> available;
+  invariant accounted:
+    model(credits_0.taken) == model(bank.inside[0]) + model(responses_0.held);
+endmodule
+)";
   auto nl = parse_string(data);
-  ASSERT_GE(nl.modules.size(), 2u);
-  const auto& top = nl.modules[1];
-  ASSERT_EQ(top.module_name, "top");
-  ASSERT_EQ(top.module_instances.size(), 2u);
+  const auto& invs = nl.modules[0].invariants;
+  ASSERT_EQ(invs.size(), 2u);
+  EXPECT_EQ(invs[0].name, "implication");
+  EXPECT_EQ(grouped(invs[0].expr), "(take -> available)");
+  EXPECT_EQ(invs[1].location.line, 7);
+  EXPECT_EQ(grouped(invs[1].expr), "(model(credits_0.taken) == (model(bank.inside[0]) + model(responses_0.held)))");
+}
 
-  // Helper for variant inspection
-  auto is_id = [](const Expr& e, const std::string& n) {
-    return std::holds_alternative<Identifier>(e) &&
-           std::get<Identifier>(e).name == n;
-  };
-  auto is_index = [](const Expr& e, const std::string& n, int64_t idx) {
-    if (!std::holds_alternative<IdentifierIndexed>(e)) return false;
-    const auto& ii = std::get<IdentifierIndexed>(e);
-    return ii.name == n && ii.index.as_integer() == idx;
-  };
-  // auto is_slice = [](const Expr& e, const std::string& n, int64_t msb, int64_t lsb) {
-  //   if (!std::holds_alternative<IdentifierSliced>(e)) return false;
-  //   const auto& s = std::get<IdentifierSliced>(e);
-  //   return s.name == n &&
-  //          s.range.msb.as_integer() == msb &&
-  //          s.range.lsb.as_integer() == lsb;
-  // };
-auto is_slice = [](const Expr& e, const std::string& n, int64_t msb, int64_t lsb) {
-  if (!std::holds_alternative<IdentifierSliced>(e)) return false;
-  const auto s = expr_to_string(e);
-  return s == (n + "[" + std::to_string(msb) + ":" + std::to_string(lsb) + "]");
-};
-
-  // --- u0: named connections: .A(sig), .Y(counter_out[1])
-  {
-    const auto& u0 = top.module_instances[0];
-    EXPECT_EQ(u0.module_name,  "BUF2");
-    EXPECT_EQ(u0.instance_name,"u0");
-    EXPECT_TRUE(u0.ports_pos.empty());
-    ASSERT_EQ(u0.ports_named.size(), 2u);
-    ASSERT_TRUE(u0.ports_named.count("A"));
-    ASSERT_TRUE(u0.ports_named.count("Y"));
-    EXPECT_TRUE(is_id(u0.ports_named.at("A"), "sig"));
-    EXPECT_TRUE(is_index(u0.ports_named.at("Y"), "counter_out", 1));
-  }
-
-  // --- u1: positional connections: (sig, bus[7:0])
-  {
-    const auto& u1 = top.module_instances[1];
-    EXPECT_EQ(u1.module_name,  "BUF2");
-    EXPECT_EQ(u1.instance_name,"u1");
-    ASSERT_EQ(u1.ports_pos.size(), 2u);
-    EXPECT_TRUE(u1.ports_named.empty());
-    EXPECT_TRUE(is_id(u1.ports_pos[0], "sig"));
-
-
-// right above the current failing line:
-EXPECT_TRUE(is_slice_structural(u1.ports_pos[1], "bus", 7, 0));
-    
-    EXPECT_TRUE(is_slice(u1.ports_pos[1], "bus", 7, 0));
+TEST(Parse, SyntaxErrorPosition) {
+  try {
+    parse_string("kernlist_format 1;\nmodule m(a, y);\n  input a;\n  output y;\n  assign y = a << 1;\nendmodule\n");
+    FAIL();
+  } catch (const parse_error& e) {
+    EXPECT_EQ(e.line, 5);
+    EXPECT_EQ(e.column, 16);
+    EXPECT_NE(std::string(e.what()).find("expected ';'"), std::string::npos) << e.what();
   }
 }
 
@@ -621,7 +444,7 @@ TEST(Builder, AddAssignmentAndInstance) {
   EXPECT_EQ(m.assignments[0].assignments.size(), 1u);
   
   // Add instance
-  auto inst = make_instance("buffer", "u0", {make_identifier("a"), make_identifier("b")});
+  auto inst = make_instance("buffer", "u0", {Connection{"in", make_identifier("a")}, Connection{"out", make_identifier("b")}});
   add_instance(m, inst);
   EXPECT_EQ(m.module_instances.size(), 1u);
   EXPECT_EQ(m.module_instances[0].instance_name, "u0");
@@ -633,12 +456,12 @@ TEST(Builder, AddAssignmentAndInstance) {
 TEST(Builder, InstanceConstruction) {
   using namespace verilog;
   
-  // Positional
-  auto inst1 = make_instance("leaf", "u0", {make_identifier("a"), make_identifier("b")});
+  // In the order given
+  auto inst1 = make_instance("leaf", "u0", {Connection{"y", make_identifier("b")}, Connection{"x", make_identifier("a")}});
   EXPECT_EQ(inst1.module_name, "leaf");
   EXPECT_EQ(inst1.instance_name, "u0");
-  EXPECT_EQ(inst1.ports_pos.size(), 2u);
-  EXPECT_TRUE(inst1.ports_named.empty());
+  ASSERT_EQ(inst1.connections.size(), 2u);
+  EXPECT_EQ(inst1.connections[0].port, "y");
   
   // Named
   auto inst2 = make_instance_named("leaf", "u1", {
@@ -647,8 +470,7 @@ TEST(Builder, InstanceConstruction) {
   });
   EXPECT_EQ(inst2.module_name, "leaf");
   EXPECT_EQ(inst2.instance_name, "u1");
-  EXPECT_TRUE(inst2.ports_pos.empty());
-  EXPECT_EQ(inst2.ports_named.size(), 2u);
+  EXPECT_EQ(inst2.connections.size(), 2u);
 }
 
 TEST(Builder, RemoveOperations) {
@@ -776,7 +598,7 @@ TEST(Writer, ModuleWithInstance) {
   
   std::string verilog = write_module(m);
   
-  EXPECT_NE(verilog.find("leaf u0"), std::string::npos);
+  EXPECT_NE(verilog.find("leaf u0 ("), std::string::npos);
   EXPECT_NE(verilog.find(".a(x)"), std::string::npos);
   EXPECT_NE(verilog.find(".b(y)"), std::string::npos);
 }
@@ -847,7 +669,7 @@ TEST(Writer, Netlist) {
   Module m2 = make_module("top");
   add_input(m2, "a");
   add_output(m2, "b");
-  auto inst = make_instance("leaf", "u0", {make_identifier("a"), make_identifier("b")});
+  auto inst = make_instance("leaf", "u0", {Connection{"x", make_identifier("a")}, Connection{"y", make_identifier("b")}});
   add_instance(m2, inst);
   
   add_module(nl, m1);
@@ -855,6 +677,7 @@ TEST(Writer, Netlist) {
   
   std::string verilog = write_netlist(nl);
   
+  EXPECT_EQ(verilog.rfind("kernlist_format 1;", 0), 0u);
   EXPECT_NE(verilog.find("module leaf"), std::string::npos);
   EXPECT_NE(verilog.find("module top"), std::string::npos);
   EXPECT_NE(verilog.find("leaf u0"), std::string::npos);
@@ -980,6 +803,7 @@ TEST(RoundTrip, ParseModifyWrite) {
   using namespace verilog;
   
   std::string original = R"(
+kernlist_format 1;
 module original(a, b);
   input a;
   output b;
@@ -1019,8 +843,8 @@ TEST(RoundTrip, CreateWriteParse) {
   // Write
   std::string verilog = write_module(m);
   
-  // Parse
-  auto nl = parse_string(verilog);
+  // Parse (write_module writes one module, without the format line)
+  auto nl = parse_string("kernlist_format 1;\n" + verilog);
   ASSERT_EQ(nl.modules.size(), 1u);
   
   const auto& parsed = nl.modules[0];
@@ -1029,4 +853,51 @@ TEST(RoundTrip, CreateWriteParse) {
   EXPECT_EQ(parsed.output_declarations.size(), 1u);
   EXPECT_EQ(parsed.net_declarations.size(), 1u);
   EXPECT_EQ(parsed.assignments.size(), 1u);
+}
+
+TEST(Writer, KernlistStatements) {
+  Module m = make_module("top");
+  add_input(m, "a");
+  add_wire(m, "w", make_range(1, 0));
+  add_wire(m, "123 odd");
+  add_assignment(m, make_identifier("w"),
+                 make_binary("&", make_binary("|", make_identifier("a"), make_identifier("a")),
+                             make_unary("~", make_identifier("a"))));
+  ModuleInstance inst = make_instance("fifo", "q", {Connection{"enqValid", make_identifier("a")}, Connection{"spare", std::nullopt}});
+  inst.parameters = {Parameter{"DEPTH", 2}, Parameter{"W", 8}};
+  inst.variant = "circular_buffer";
+  add_instance(m, inst);
+  add_invariant(m, "held", make_binary("->", make_identifier("a"),
+                                       make_binary("==", make_model_ref("q", "count"), make_number(1))));
+  std::string text = write_module(m);
+  EXPECT_NE(text.find("assign w = (a | a) & ~a;"), std::string::npos) << text;
+  EXPECT_NE(text.find("fifo #(.DEPTH(2), .W(8)) variant circular_buffer q ("), std::string::npos) << text;
+  EXPECT_NE(text.find(".spare()"), std::string::npos) << text;
+  EXPECT_NE(text.find("invariant held: a -> model(q.count) == 1;"), std::string::npos) << text;
+  EXPECT_NE(text.find("wire \\123 odd ;"), std::string::npos) << text;
+}
+
+TEST(RoundTrip, KernlistStatements) {
+  std::string original = R"(kernlist_format 1;
+module top(a, y);
+  input a;
+  output [1:0] y;
+  wire [3:0] g;
+  wire \%c-2_i2 ;
+  assign \%c-2_i2 = ~a;
+  assign y = {g[3:2] != 2'd0, g[3] | g[1]}, g = {4{a}};
+  arbiter #(.N(4)) variant round_robin arb (.req({a, a, a, \%c-2_i2 }), .gnt(g), .any());
+  invariant one_hot: g[0] -> y == 2'd0;
+  invariant counted: model(arb.waiting) <= 4 - 1;
+endmodule
+)";
+  auto nl = parse_string(original);
+  std::string written = write_netlist(nl);
+  auto again = parse_string(written);
+  EXPECT_EQ(write_netlist(again), written);
+  const auto& m = again.modules[0];
+  ASSERT_EQ(m.module_instances.size(), 1u);
+  EXPECT_EQ(m.module_instances[0].variant.value(), "round_robin");
+  EXPECT_EQ(m.invariants.size(), 2u);
+  EXPECT_EQ(m.net_declarations[1].net_name, "%c-2_i2");
 }
