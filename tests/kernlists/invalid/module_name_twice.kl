@@ -1,0 +1,6 @@
+// EXPECT checking: two modules named m in one file.
+kernlist_format 1;
+module m ();
+endmodule
+module m ();
+endmodule

@@ -1,0 +1,7 @@
+// EXPECT reading: the format line must come before the first module (KL03).
+module m (a, y);
+  input a;
+  output y;
+  assign y = a;
+endmodule
+kernlist_format 1;

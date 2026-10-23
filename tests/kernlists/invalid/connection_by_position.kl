@@ -1,0 +1,6 @@
+// EXPECT reading: connections are given by name, as .in(a).
+kernlist_format 1;
+module m (a);
+  input a;
+  sink #(.W(1)) consume (a);
+endmodule

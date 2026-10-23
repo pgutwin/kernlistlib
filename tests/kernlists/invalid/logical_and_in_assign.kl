@@ -1,0 +1,7 @@
+// EXPECT reading: && is not in KL08's list; use &. Not read as a & &b.
+kernlist_format 1;
+module m (a, b, y);
+  input a, b;
+  output y;
+  assign y = a && b;
+endmodule

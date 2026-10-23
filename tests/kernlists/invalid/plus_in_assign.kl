@@ -1,0 +1,7 @@
+// EXPECT reading: + is arithmetic, not allowed in assign; use a motif (KL08).
+kernlist_format 1;
+module m (a, b, y);
+  input [3:0] a, b;
+  output [3:0] y;
+  assign y = a + b;
+endmodule

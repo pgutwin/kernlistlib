@@ -1,0 +1,7 @@
+// EXPECT checking: port b is in the port list but has no input or output declaration.
+kernlist_format 1;
+module m (a, b, y);
+  input a;
+  output y;
+  assign y = a;
+endmodule

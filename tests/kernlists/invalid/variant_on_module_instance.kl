@@ -1,0 +1,9 @@
+// EXPECT checking: an instance of a kernlist module in the same file has no variant (KL06).
+kernlist_format 1;
+module inner (a);
+  input a;
+endmodule
+module outer (a);
+  input a;
+  inner variant fast i (.a(a));
+endmodule

@@ -1,0 +1,6 @@
+// EXPECT reading: constants in assign must be sized, as 1'b1 (KL08).
+kernlist_format 1;
+module m (y);
+  output y;
+  assign y = 1;
+endmodule

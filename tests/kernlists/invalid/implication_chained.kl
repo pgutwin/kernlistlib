@@ -1,0 +1,6 @@
+// EXPECT reading: at most one -> per invariant; write a -> (b & c) or two invariants.
+kernlist_format 1;
+module m (a, b, c);
+  input a, b, c;
+  invariant chain: a -> b -> c;
+endmodule

@@ -1,0 +1,6 @@
+// EXPECT reading: variant must be followed by the variant's name (KL06).
+kernlist_format 1;
+module m (a);
+  input a;
+  sink #(.W(1)) variant consume (.in(a));
+endmodule

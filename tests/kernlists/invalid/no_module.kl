@@ -1,0 +1,2 @@
+// EXPECT reading: a file needs at least one module (KL03).
+kernlist_format 1;

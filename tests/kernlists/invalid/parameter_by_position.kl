@@ -1,0 +1,6 @@
+// EXPECT reading: parameters are given by name, as .W(8) (KL06).
+kernlist_format 1;
+module m (a);
+  input [7:0] a;
+  sink #(8) consume (.in(a));
+endmodule

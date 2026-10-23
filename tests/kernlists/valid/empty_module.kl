@@ -1,0 +1,4 @@
+// A module with no ports and no statements.
+kernlist_format 1;
+module empty ();
+endmodule

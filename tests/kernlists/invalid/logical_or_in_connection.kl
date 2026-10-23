@@ -1,0 +1,6 @@
+// EXPECT reading: || is not in KL08's list; use |. Not read as a | |b.
+kernlist_format 1;
+module m (a, b);
+  input a, b;
+  sink #(.W(1)) consume (.in(a||b));
+endmodule

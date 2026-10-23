@@ -1,0 +1,10 @@
+/* Comments and white space may come before the format line (KL03). */
+// A line comment too.
+
+kernlist_format 1;  // and after it
+module comments (a, y);
+  input a;   /* a block comment
+                over two lines */
+  output y;
+  assign y = ~a;
+endmodule

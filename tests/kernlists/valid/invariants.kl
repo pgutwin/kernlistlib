@@ -1,0 +1,23 @@
+// Invariant statements (KL10): plain logic, implication, model values, arithmetic and comparison.
+kernlist_format 1;
+module invariants (take, give, ok);
+  input  take, give;
+  output ok;
+  wire   credits_available, buffer_deqValid;
+  wire   [1:0] number;
+
+  credit_counter #(.LIMIT(2)) variant thermometer credits (.take(take), .give(give), .available(credits_available));
+  assign ok = credits_available;
+  assign number = {take, give};
+
+  invariant plain_logic: credits_available | ~take;
+  invariant implication: take -> credits_available;
+  invariant implication_of_equality: number == 2'd3 -> take & give;
+  invariant model_value: model(credits.taken) <= 2;
+  invariant model_sum: model(credits.taken) + 0 == model(credits.taken) + 1 - 1;
+  invariant model_with_select: model(credits.taken[0]) != 0;
+  invariant model_with_constant: model(credits.taken) == 2 -> ~credits_available;
+  invariant written_over_lines:
+    model(credits.taken) < 2
+      -> credits_available;
+endmodule

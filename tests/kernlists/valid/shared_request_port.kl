@@ -1,0 +1,62 @@
+// DERIVED from kern-design-examples (commit bc7f1b3): designs/shared_request_port/design.py,
+// written by hand in the kernlist format (doc/KERNLIST_format.md). Not a copy: edit here freely.
+// Wires carrying a motif's outputs are named <instance>_<port>.
+kernlist_format 1;
+
+module SharedRequestPort (
+  io_request_0_valid, io_request_0_bits, io_request_0_ready,
+  io_request_1_valid, io_request_1_bits, io_request_1_ready,
+  io_request_2_valid, io_request_2_bits, io_request_2_ready,
+  io_request_3_valid, io_request_3_bits, io_request_3_ready,
+  io_memory_valid, io_memory_bits_address, io_memory_bits_master
+);
+  input        io_request_0_valid, io_request_1_valid, io_request_2_valid, io_request_3_valid;
+  input  [7:0] io_request_0_bits, io_request_1_bits, io_request_2_bits, io_request_3_bits;
+  output       io_request_0_ready, io_request_1_ready, io_request_2_ready, io_request_3_ready;
+  output       io_memory_valid;
+  output [7:0] io_memory_bits_address;
+  output [1:0] io_memory_bits_master;
+
+  // Outputs of the motifs
+  wire       buffers_fifo_enqReady,   buffers_fifo_deqValid;
+  wire       buffers_fifo_1_enqReady, buffers_fifo_1_deqValid;
+  wire       buffers_fifo_2_enqReady, buffers_fifo_2_deqValid;
+  wire       buffers_fifo_3_enqReady, buffers_fifo_3_deqValid;
+  wire [7:0] buffers_fifo_deqData, buffers_fifo_1_deqData, buffers_fifo_2_deqData, buffers_fifo_3_deqData;
+  wire [3:0] arbiter_gnt;
+  wire       arbiter_any;
+  wire [7:0] io_memory_bits_address_selector_out;
+
+  // One buffer per master
+  fifo #(.DEPTH(2), .W(8)) variant circular_buffer buffers_fifo (
+    .enqValid(io_request_0_valid), .enqData(io_request_0_bits), .enqReady(buffers_fifo_enqReady),
+    .deqValid(buffers_fifo_deqValid), .deqData(buffers_fifo_deqData), .deqReady(arbiter_gnt[0]));
+  fifo #(.DEPTH(2), .W(8)) variant circular_buffer buffers_fifo_1 (
+    .enqValid(io_request_1_valid), .enqData(io_request_1_bits), .enqReady(buffers_fifo_1_enqReady),
+    .deqValid(buffers_fifo_1_deqValid), .deqData(buffers_fifo_1_deqData), .deqReady(arbiter_gnt[1]));
+  fifo #(.DEPTH(2), .W(8)) variant circular_buffer buffers_fifo_2 (
+    .enqValid(io_request_2_valid), .enqData(io_request_2_bits), .enqReady(buffers_fifo_2_enqReady),
+    .deqValid(buffers_fifo_2_deqValid), .deqData(buffers_fifo_2_deqData), .deqReady(arbiter_gnt[2]));
+  fifo #(.DEPTH(2), .W(8)) variant circular_buffer buffers_fifo_3 (
+    .enqValid(io_request_3_valid), .enqData(io_request_3_bits), .enqReady(buffers_fifo_3_enqReady),
+    .deqValid(buffers_fifo_3_deqValid), .deqData(buffers_fifo_3_deqData), .deqReady(arbiter_gnt[3]));
+
+  // Whose turn it is
+  arbiter #(.N(4)) variant round_robin arbiter (
+    .req({buffers_fifo_3_deqValid, buffers_fifo_2_deqValid, buffers_fifo_1_deqValid, buffers_fifo_deqValid}),
+    .gnt(arbiter_gnt), .any(arbiter_any));
+
+  // The granted address
+  selector #(.N(4), .W(8)) variant and_or io_memory_bits_address_selector (
+    .data({buffers_fifo_3_deqData, buffers_fifo_2_deqData, buffers_fifo_1_deqData, buffers_fifo_deqData}),
+    .sel(arbiter_gnt), .out(io_memory_bits_address_selector_out));
+
+  assign io_request_0_ready = buffers_fifo_enqReady;
+  assign io_request_1_ready = buffers_fifo_1_enqReady;
+  assign io_request_2_ready = buffers_fifo_2_enqReady;
+  assign io_request_3_ready = buffers_fifo_3_enqReady;
+  assign io_memory_valid = arbiter_any;
+  assign io_memory_bits_address = io_memory_bits_address_selector_out;
+  // The granted master's number (logic_0 in the flow)
+  assign io_memory_bits_master = {arbiter_gnt[3:2] != 2'd0, arbiter_gnt[3] | arbiter_gnt[1]};
+endmodule

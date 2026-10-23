@@ -1,0 +1,7 @@
+// EXPECT reading: << is a shift, not allowed in assign (KL08).
+kernlist_format 1;
+module m (a, y);
+  input [3:0] a;
+  output [3:0] y;
+  assign y = a << 1;
+endmodule

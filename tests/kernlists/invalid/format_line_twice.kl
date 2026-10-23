@@ -1,0 +1,8 @@
+// EXPECT reading: a second format line (KL03).
+kernlist_format 1;
+kernlist_format 1;
+module m (a, y);
+  input a;
+  output y;
+  assign y = a;
+endmodule

@@ -1,0 +1,30 @@
+// Every expression form KL08 allows, in assign and in connections.
+kernlist_format 1;
+module operators (a, b, c, s, y);
+  input  [3:0] a, b;
+  input        c;
+  input  [1:0] s;
+  output [3:0] y;
+  wire   [3:0] w_and, w_or, w_xor, w_not, w_choice, w_join, w_repeat;
+  wire         r_and, r_or, r_xor, eq, ne, w_bit;
+  wire   [1:0] w_part;
+  wire         w_hi, w_lo, w_spaced;
+
+  assign w_and = a & b;
+  assign w_or  = a | b;
+  assign w_xor = a ^ b;
+  assign w_not = ~a;
+  assign r_and = &a, r_or = |a, r_xor = ^a;      // reductions; several assignments in one statement
+  assign eq = a == 4'b1010;
+  assign ne = a != 4'hf;
+  assign w_choice = c ? a : b;
+  assign w_join = {a[1:0], s};
+  assign w_repeat = {4{c}};
+  assign w_bit = a[3];
+  assign w_part = b[2:1];
+  assign {w_hi, w_lo} = s;
+  assign w_spaced = c & &a;                        // and of c with the and-reduction of a; c&&a is not allowed                         // concatenation on the left
+  // precedence, lowest first: ?:  |  ^  &  == !=  unary
+  assign y = c ? a | b ^ a & ~b : {2{s == 2'd1, &a}};
+  sink #(.W(4)) variant plain consume (.in(w_and & {4{eq | ne}}));
+endmodule

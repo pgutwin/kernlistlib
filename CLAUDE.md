@@ -66,7 +66,7 @@ doc/
   kernlist.bnf               the grammar
   verilog_subset.bnf, ...    veriloglib's documents, kept as they were at the fork
 include/  src/               the library and the command-line tool
-tests/                       unit tests; tests/kernlists/ for example kernlists (to come)
+tests/                       unit tests; tests/kernlists/ the kernlist test set (README there)
 python/                      Python bindings (to come)
 ```
 

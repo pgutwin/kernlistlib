@@ -1,0 +1,10 @@
+// EXPECT checking: w is declared twice.
+kernlist_format 1;
+module m (a, y);
+  input a;
+  output y;
+  wire w;
+  wire w;
+  assign w = a;
+  assign y = w;
+endmodule

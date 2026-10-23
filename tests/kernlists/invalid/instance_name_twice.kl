@@ -1,0 +1,7 @@
+// EXPECT checking: two instances named buffer in one module.
+kernlist_format 1;
+module m (a);
+  input a;
+  sink #(.W(1)) buffer (.in(a));
+  sink #(.W(1)) buffer (.in(a));
+endmodule

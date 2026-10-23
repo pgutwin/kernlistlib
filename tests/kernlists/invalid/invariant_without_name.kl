@@ -1,0 +1,6 @@
+// EXPECT reading: an invariant needs a name and a colon (KL10).
+kernlist_format 1;
+module m (a, b);
+  input a, b;
+  invariant a -> b;
+endmodule

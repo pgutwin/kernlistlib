@@ -1,0 +1,7 @@
+// EXPECT reading: < is an ordered comparison, not allowed in assign (KL08).
+kernlist_format 1;
+module m (a, b, y);
+  input [3:0] a, b;
+  output y;
+  assign y = a < b;
+endmodule

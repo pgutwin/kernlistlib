@@ -1,0 +1,6 @@
+// EXPECT reading: a parameter's value is a decimal number (KL06).
+kernlist_format 1;
+module m (a);
+  input [7:0] a;
+  sink #(.W(WIDTH)) consume (.in(a));
+endmodule

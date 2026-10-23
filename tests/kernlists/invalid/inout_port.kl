@@ -1,0 +1,5 @@
+// EXPECT reading: inout is not part of the format.
+kernlist_format 1;
+module m (a);
+  inout a;
+endmodule

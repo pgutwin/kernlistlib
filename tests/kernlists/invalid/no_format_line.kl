@@ -1,0 +1,6 @@
+// EXPECT reading: the file does not start with the format line (KL03).
+module m (a, y);
+  input a;
+  output y;
+  assign y = a;
+endmodule

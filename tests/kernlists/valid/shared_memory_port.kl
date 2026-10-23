@@ -1,0 +1,147 @@
+// DERIVED from kern-design-examples (commit bc7f1b3): experiments/kernlist_formats/results/kernlist.kv
+// and designs/shared_memory_port, rewritten by hand in the kernlist format (doc/KERNLIST_format.md).
+// Not a copy: edit here freely. Wires carrying a motif's outputs are named <instance>_<port>;
+// response FIFO 0 is named responses, as in the flow.
+kernlist_format 1;
+
+module SharedMemoryPort (
+  io_request_0_valid, io_request_0_bits, io_request_0_ready,
+  io_request_1_valid, io_request_1_bits, io_request_1_ready,
+  io_request_2_valid, io_request_2_bits, io_request_2_ready,
+  io_request_3_valid, io_request_3_bits, io_request_3_ready,
+  io_response_0_valid, io_response_0_bits, io_response_0_ready,
+  io_response_1_valid, io_response_1_bits, io_response_1_ready,
+  io_response_2_valid, io_response_2_bits, io_response_2_ready,
+  io_response_3_valid, io_response_3_bits, io_response_3_ready,
+  io_write_valid, io_write_bits_address, io_write_bits_data
+);
+  input         io_request_0_valid, io_request_1_valid, io_request_2_valid, io_request_3_valid;
+  input  [7:0]  io_request_0_bits, io_request_1_bits, io_request_2_bits, io_request_3_bits;
+  output        io_request_0_ready, io_request_1_ready, io_request_2_ready, io_request_3_ready;
+  output        io_response_0_valid, io_response_1_valid, io_response_2_valid, io_response_3_valid;
+  output [31:0] io_response_0_bits, io_response_1_bits, io_response_2_bits, io_response_3_bits;
+  input         io_response_0_ready, io_response_1_ready, io_response_2_ready, io_response_3_ready;
+  input         io_write_valid;
+  input  [7:0]  io_write_bits_address;
+  input  [31:0] io_write_bits_data;
+
+  // Outputs of the motifs
+  wire        requests_fifo_enqReady, requests_fifo_deqValid;
+  wire [7:0]  requests_fifo_deqData;
+  wire        requests_fifo_1_enqReady, requests_fifo_1_deqValid;
+  wire [7:0]  requests_fifo_1_deqData;
+  wire        requests_fifo_2_enqReady, requests_fifo_2_deqValid;
+  wire [7:0]  requests_fifo_2_deqData;
+  wire        requests_fifo_3_enqReady, requests_fifo_3_deqValid;
+  wire [7:0]  requests_fifo_3_deqData;
+  wire        credits_0_available;
+  wire        credits_1_available;
+  wire        credits_2_available;
+  wire        credits_3_available;
+  wire [3:0]  arbiter_gnt;
+  wire        arbiter_any;
+  wire [7:0]  bank_io_read_bits_address_selector_out;
+  wire        bank_responseValid;
+  wire [31:0] bank_responseData;
+  wire [1:0]  bank_responseTag;
+  wire        responses_enqReady, responses_deqValid;
+  wire [31:0] responses_deqData;
+  wire        responses_1_enqReady, responses_1_deqValid;
+  wire [31:0] responses_1_deqData;
+  wire        responses_2_enqReady, responses_2_deqValid;
+  wire [31:0] responses_2_deqData;
+  wire        responses_3_enqReady, responses_3_deqValid;
+  wire [31:0] responses_3_deqData;
+
+  // Logic between motifs
+  wire [3:0]  eligible;
+  wire [1:0]  master_number;
+  wire [3:0]  response_for, response_taken;
+
+  // Request buffers
+  fifo #(.DEPTH(2), .W(8)) variant circular_buffer requests_fifo (
+    .enqValid(io_request_0_valid), .enqData(io_request_0_bits), .enqReady(requests_fifo_enqReady),
+    .deqValid(requests_fifo_deqValid), .deqData(requests_fifo_deqData), .deqReady(arbiter_gnt[0]));
+  fifo #(.DEPTH(2), .W(8)) variant circular_buffer requests_fifo_1 (
+    .enqValid(io_request_1_valid), .enqData(io_request_1_bits), .enqReady(requests_fifo_1_enqReady),
+    .deqValid(requests_fifo_1_deqValid), .deqData(requests_fifo_1_deqData), .deqReady(arbiter_gnt[1]));
+  fifo #(.DEPTH(2), .W(8)) variant circular_buffer requests_fifo_2 (
+    .enqValid(io_request_2_valid), .enqData(io_request_2_bits), .enqReady(requests_fifo_2_enqReady),
+    .deqValid(requests_fifo_2_deqValid), .deqData(requests_fifo_2_deqData), .deqReady(arbiter_gnt[2]));
+  fifo #(.DEPTH(2), .W(8)) variant circular_buffer requests_fifo_3 (
+    .enqValid(io_request_3_valid), .enqData(io_request_3_bits), .enqReady(requests_fifo_3_enqReady),
+    .deqValid(requests_fifo_3_deqValid), .deqData(requests_fifo_3_deqData), .deqReady(arbiter_gnt[3]));
+
+  // Credits: requests outstanding per master
+  credit_counter #(.LIMIT(2)) variant binary credits_0 (.take(arbiter_gnt[0]), .give(response_taken[0]), .available(credits_0_available));
+  credit_counter #(.LIMIT(2)) variant binary credits_1 (.take(arbiter_gnt[1]), .give(response_taken[1]), .available(credits_1_available));
+  credit_counter #(.LIMIT(2)) variant binary credits_2 (.take(arbiter_gnt[2]), .give(response_taken[2]), .available(credits_2_available));
+  credit_counter #(.LIMIT(2)) variant binary credits_3 (.take(arbiter_gnt[3]), .give(response_taken[3]), .available(credits_3_available));
+
+  // Whose turn it is, among masters with a request and a credit
+  assign eligible = {requests_fifo_3_deqValid & credits_3_available, requests_fifo_2_deqValid & credits_2_available, requests_fifo_1_deqValid & credits_1_available, requests_fifo_deqValid & credits_0_available};
+  arbiter #(.N(4)) variant round_robin arbiter (.req(eligible), .gnt(arbiter_gnt), .any(arbiter_any));
+  assign master_number = {arbiter_gnt[3:2] != 2'd0, arbiter_gnt[3] | arbiter_gnt[1]};
+
+  // The memory, carrying the master's number as its tag
+  selector #(.N(4), .W(8)) variant and_or bank_io_read_bits_address_selector (
+    .data({requests_fifo_3_deqData, requests_fifo_2_deqData, requests_fifo_1_deqData, requests_fifo_deqData}),
+    .sel(arbiter_gnt), .out(bank_io_read_bits_address_selector_out));
+  memory_1w1r_tagged #(.ABITS(8), .W(32), .TAGW(2)) variant sram_registered_output bank (
+    .readValid(arbiter_any), .readAddress(bank_io_read_bits_address_selector_out), .readTag(master_number),
+    .writeValid(io_write_valid), .writeAddress(io_write_bits_address), .writeData(io_write_bits_data),
+    .responseValid(bank_responseValid), .responseData(bank_responseData), .responseTag(bank_responseTag));
+
+  // Response buffers
+  assign response_for[0] = bank_responseValid & bank_responseTag == 2'd0;
+  assign response_for[1] = bank_responseValid & bank_responseTag == 2'd1;
+  assign response_for[2] = bank_responseValid & bank_responseTag == 2'd2;
+  assign response_for[3] = bank_responseValid & bank_responseTag == 2'd3;
+  fifo #(.DEPTH(2), .W(32)) variant circular_buffer responses (
+    .enqValid(response_for[0]), .enqData(bank_responseData), .enqReady(responses_enqReady),
+    .deqValid(responses_deqValid), .deqData(responses_deqData), .deqReady(io_response_0_ready));
+  fifo #(.DEPTH(2), .W(32)) variant circular_buffer responses_1 (
+    .enqValid(response_for[1]), .enqData(bank_responseData), .enqReady(responses_1_enqReady),
+    .deqValid(responses_1_deqValid), .deqData(responses_1_deqData), .deqReady(io_response_1_ready));
+  fifo #(.DEPTH(2), .W(32)) variant circular_buffer responses_2 (
+    .enqValid(response_for[2]), .enqData(bank_responseData), .enqReady(responses_2_enqReady),
+    .deqValid(responses_2_deqValid), .deqData(responses_2_deqData), .deqReady(io_response_2_ready));
+  fifo #(.DEPTH(2), .W(32)) variant circular_buffer responses_3 (
+    .enqValid(response_for[3]), .enqData(bank_responseData), .enqReady(responses_3_enqReady),
+    .deqValid(responses_3_deqValid), .deqData(responses_3_deqData), .deqReady(io_response_3_ready));
+  assign response_taken[0] = io_response_0_ready & responses_deqValid;
+  assign response_taken[1] = io_response_1_ready & responses_1_deqValid;
+  assign response_taken[2] = io_response_2_ready & responses_2_deqValid;
+  assign response_taken[3] = io_response_3_ready & responses_3_deqValid;
+
+  assign io_request_0_ready = requests_fifo_enqReady;
+  assign io_request_1_ready = requests_fifo_1_enqReady;
+  assign io_request_2_ready = requests_fifo_2_enqReady;
+  assign io_request_3_ready = requests_fifo_3_enqReady;
+  assign io_response_0_valid = responses_deqValid;
+  assign io_response_0_bits = responses_deqData;
+  assign io_response_1_valid = responses_1_deqValid;
+  assign io_response_1_bits = responses_1_deqData;
+  assign io_response_2_valid = responses_2_deqValid;
+  assign io_response_2_bits = responses_2_deqData;
+  assign io_response_3_valid = responses_3_deqValid;
+  assign io_response_3_bits = responses_3_deqData;
+
+  // Stated by the designer (kern-design-examples, design invariants experiment)
+  invariant credits_0_accounted:
+    model(credits_0.taken) == model(bank.inside[0]) + model(responses.held);
+  invariant credits_1_accounted:
+    model(credits_1.taken) == model(bank.inside[1]) + model(responses_1.held);
+  invariant credits_2_accounted:
+    model(credits_2.taken) == model(bank.inside[2]) + model(responses_2.held);
+  invariant credits_3_accounted:
+    model(credits_3.taken) == model(bank.inside[3]) + model(responses_3.held);
+  invariant tag_is_master_0:
+    arbiter_gnt[0] -> master_number == 2'd0;
+  invariant tag_is_master_1:
+    arbiter_gnt[1] -> master_number == 2'd1;
+  invariant tag_is_master_2:
+    arbiter_gnt[2] -> master_number == 2'd2;
+  invariant tag_is_master_3:
+    arbiter_gnt[3] -> master_number == 2'd3;
+endmodule

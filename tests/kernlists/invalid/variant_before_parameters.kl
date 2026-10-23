@@ -1,0 +1,6 @@
+// EXPECT reading: variant comes after the parameters (KL06).
+kernlist_format 1;
+module m (a);
+  input [7:0] a;
+  sink variant plain #(.W(8)) consume (.in(a));
+endmodule

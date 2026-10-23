@@ -55,3 +55,11 @@
 <base_char>          ::= "b" | "B" | "o" | "O" | "d" | "D" | "h" | "H"
 <unsigned_decimal>   ::= "0".."9" { "0".."9" }
 <identifier>         ::= as in verilog_subset.bnf (normal or escaped)
+
+; Lexical notes (found while checking the test set, tests/kernlists):
+; - Keywords are not identifiers: module endmodule input output wire assign variant invariant
+;   model kernlist_format.
+; - "&&" and "||" are single tokens, as in Verilog, and are not allowed anywhere: a&&b is an
+;   error, not a & &b. Write a & &b (with a space) for an and with an and-reduction.
+; - In <inv_term>, a decimal number followed by "'" is a sized number (an <expression>), not
+;   an <unsigned_decimal>: model(x.count) == 2'd1 compares with a sized constant.

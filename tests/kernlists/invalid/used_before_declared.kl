@@ -1,0 +1,9 @@
+// EXPECT checking: w is used before its declaration.
+kernlist_format 1;
+module m (a, y);
+  input a;
+  output y;
+  assign y = w;
+  wire w;
+  assign w = a;
+endmodule

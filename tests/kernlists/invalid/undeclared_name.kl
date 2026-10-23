@@ -1,0 +1,7 @@
+// EXPECT checking: other is not declared (names are declared before use).
+kernlist_format 1;
+module m (a, y);
+  input a;
+  output y;
+  assign y = a & other;
+endmodule

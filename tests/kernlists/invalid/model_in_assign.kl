@@ -1,0 +1,7 @@
+// EXPECT reading: model(...) is allowed only in invariant statements (KL10).
+kernlist_format 1;
+module m (y);
+  output [1:0] y;
+  credit_counter #(.LIMIT(2)) credits (.take(1'b0), .give(1'b0), .available());
+  assign y = model(credits.taken);
+endmodule

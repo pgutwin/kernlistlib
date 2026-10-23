@@ -1,0 +1,7 @@
+// The smallest useful file: the format line and one module with one assignment.
+kernlist_format 1;
+module minimal (a, y);
+  input a;
+  output y;
+  assign y = a;
+endmodule

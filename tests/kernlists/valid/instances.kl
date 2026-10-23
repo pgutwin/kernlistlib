@@ -1,0 +1,28 @@
+// Motif instances (KL06): with and without parameters, with and without a variant.
+kernlist_format 1;
+module instances (in_valid, in_data, in_ready, out_valid, out_data, out_ready);
+  input        in_valid, out_ready;
+  input  [7:0] in_data;
+  output       in_ready, out_valid;
+  output [7:0] out_data;
+
+  wire       first_enqReady, first_deqValid, second_enqReady, second_deqValid;
+  wire [7:0] first_deqData, second_deqData;
+
+  // parameters and a variant
+  fifo #(.DEPTH(2), .W(8)) variant circular_buffer first (
+    .enqValid(in_valid), .enqData(in_data), .enqReady(first_enqReady),
+    .deqValid(first_deqValid), .deqData(first_deqData), .deqReady(second_enqReady));
+  // parameters, variant not yet chosen
+  fifo #(.DEPTH(4), .W(8)) second (
+    .enqValid(first_deqValid), .enqData(first_deqData), .enqReady(second_enqReady),
+    .deqValid(second_deqValid), .deqData(second_deqData), .deqReady(out_ready));
+  // no parameters, a variant; a port left unconnected
+  probe variant passive watch (.seen(second_deqValid), .unused());
+  // no parameters, no variant, no connections
+  spare nothing ();
+
+  assign in_ready = first_enqReady;
+  assign out_valid = second_deqValid;
+  assign out_data = second_deqData;
+endmodule

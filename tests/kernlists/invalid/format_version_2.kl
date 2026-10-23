@@ -1,0 +1,7 @@
+// EXPECT checking: format version 2 is not known; only 1 is (KL03).
+kernlist_format 2;
+module m (a, y);
+  input a;
+  output y;
+  assign y = a;
+endmodule

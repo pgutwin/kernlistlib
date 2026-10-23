@@ -1,0 +1,9 @@
+// Escaped identifiers, as Verilog has them (a backslash, any printable characters, then white space).
+kernlist_format 1;
+module \escaped-names (\in.a , y);
+  input \in.a ;
+  output y;
+  wire \%c-2_i2 ;
+  assign \%c-2_i2 = ~\in.a ;
+  assign y = \%c-2_i2 ;
+endmodule

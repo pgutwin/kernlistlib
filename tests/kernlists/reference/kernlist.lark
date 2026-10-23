@@ -1,0 +1,60 @@
+// A reference reading of doc/kernlist.bnf in Lark, used only to check the test set
+// before the C++ reader exists. doc/kernlist.bnf is the specification; keep the two alike.
+
+file: format_line module+
+format_line: "kernlist_format" UNSIGNED ";"
+
+module: "module" IDENT "(" [IDENT ("," IDENT)*] ")" ";" module_item* "endmodule"
+?module_item: declaration ";" | continuous_assign | instantiation | invariant
+
+declaration: DIRECTION [range] IDENT ("," IDENT)*
+DIRECTION: "input" | "output" | "wire"
+range: "[" UNSIGNED ":" UNSIGNED "]"
+
+continuous_assign: "assign" assignment ("," assignment)* ";"
+assignment: lvalue "=" expression
+lvalue: IDENT [select] | "{" lvalue ("," lvalue)* "}"
+
+instantiation: IDENT [parameters] [variant] IDENT "(" [connection ("," connection)*] ")" ";"
+variant: "variant" IDENT
+parameters: "#" "(" parameter ("," parameter)* ")"
+parameter: "." IDENT "(" UNSIGNED ")"
+connection: "." IDENT "(" [expression] ")"
+
+?expression: or_expr | or_expr "?" expression ":" expression -> choice
+?or_expr: xor_expr | or_expr OR xor_expr -> or_
+?xor_expr: and_expr | xor_expr "^" and_expr -> xor
+?and_expr: eq_expr | and_expr AND eq_expr -> and_
+?eq_expr: unary | unary EQOP unary -> equality
+EQOP: "==" | "!="
+?unary: primary | UNOP primary -> unary_op
+UNOP: "~" | AND | OR | "^"
+// && and || are single tokens in Verilog, so a&&b is not a & &b; neither is allowed
+AND: /&(?!&)/
+OR: /\|(?!\|)/
+?primary: name
+        | SIZED
+        | "{" expression ("," expression)* "}" -> concat
+        | "{" UNSIGNED "{" expression ("," expression)* "}" "}" -> replicate
+        | "(" expression ")"
+name: IDENT [select]
+select: "[" UNSIGNED [":" UNSIGNED] "]"
+
+invariant: "invariant" IDENT ":" inv_expression ";"
+?inv_expression: inv_compare | inv_compare "->" inv_compare -> implication
+?inv_compare: inv_sum | inv_sum CMPOP inv_sum -> comparison
+CMPOP: "==" | "!=" | "<=" | ">=" | "<" | ">"
+?inv_sum: inv_term | inv_sum SUMOP inv_term -> sum
+SUMOP: "+" | "-"
+?inv_term: model_ref | UNSIGNED -> number | expression
+model_ref: "model" "(" IDENT "." IDENT [select] ")"
+
+SIZED: /[0-9]+'[bBoOdDhH][0-9a-fA-FxXzZ_]+/
+UNSIGNED: /[0-9]+/
+// keywords are not identifiers
+IDENT: /(?!(module|endmodule|input|output|wire|assign|variant|invariant|model|kernlist_format)\b)[A-Za-z_][A-Za-z0-9_$]*/
+     | /\\[^\s]+/
+
+COMMENT: "//" /[^\n]*/ | "/*" /(.|\n)*?/ "*/"
+%ignore COMMENT
+%ignore /\s+/

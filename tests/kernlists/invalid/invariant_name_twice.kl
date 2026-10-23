@@ -1,0 +1,7 @@
+// EXPECT checking: two invariants named same in one module.
+kernlist_format 1;
+module m (a, b);
+  input a, b;
+  invariant same: a -> b;
+  invariant same: b -> a;
+endmodule
