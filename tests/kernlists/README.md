@@ -61,6 +61,7 @@ be edited here freely.
 | `invariant_without_name.kl` | reading | no name and colon |
 | `implication_chained.kl` | reading | `a -> b -> c` |
 | `implication_not_outermost.kl` | checking | `(a -> b) & c` |
+| `protocol_statement.kl` | reading | `protocol` is reserved, not yet supported (KL20) |
 | `undeclared_name.kl` | checking | a name never declared |
 | `used_before_declared.kl` | checking | a name used before its declaration |
 | `declared_twice.kl` | checking | a wire declared twice |

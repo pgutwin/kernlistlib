@@ -198,3 +198,22 @@ TEST(Groups, SharedMemoryPort) {
   EXPECT_EQ(gs[6].inputs, (std::vector<std::string>{ "bank_responseValid", "bank_responseTag" }));
   EXPECT_EQ(gs[6].operations, 2);
 }
+
+TEST(Groups, Pieces) {
+  // A group lists its operator expressions and the bits each drives, least significant first
+  auto gs = groups_of("  wire [1:0] w;\n  assign w = {a & b, c};\n  assign y = {w[1] | d, 3'b000};\n"
+                      "  sink #(.W(2)) s (.in({c ^ d, a}));\n");
+  ASSERT_EQ(gs.size(), 2u);
+  ASSERT_EQ(gs[0].pieces.size(), 2u);
+  EXPECT_EQ(verilog::write_expr(gs[0].pieces[0].expr), "a & b");
+  ASSERT_EQ(gs[0].pieces[0].drives.size(), 1u);
+  EXPECT_EQ(gs[0].pieces[0].drives[0].signal, "w");
+  EXPECT_EQ(gs[0].pieces[0].drives[0].index, 1);
+  EXPECT_EQ(verilog::write_expr(gs[0].pieces[1].expr), "w[1] | d");
+  EXPECT_EQ(gs[0].pieces[1].drives[0].signal, "y");
+  EXPECT_EQ(gs[0].pieces[1].drives[0].index, 3);
+  ASSERT_EQ(gs[1].pieces.size(), 1u);
+  EXPECT_EQ(gs[1].pieces[0].drives[0].signal, "s.in");
+  EXPECT_TRUE(gs[1].pieces[0].drives[0].port);
+  EXPECT_EQ(gs[1].pieces[0].drives[0].index, 1);
+}

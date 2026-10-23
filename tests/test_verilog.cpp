@@ -86,6 +86,7 @@ endmodule
 TEST(Parse, KeywordsAreNotNames) {
   EXPECT_THROW(parse_string("kernlist_format 1; module m(); wire variant; endmodule"), parse_error);
   EXPECT_THROW(parse_string("kernlist_format 1; module m(); wire model; endmodule"), parse_error);
+  EXPECT_THROW(parse_string("kernlist_format 1; module m(); wire protocol; endmodule"), parse_error);
   // but names that start with a keyword are names
   auto nl = parse_string("kernlist_format 1; module m(); wire variant_x, model_y; endmodule");
   EXPECT_EQ(nl.modules[0].net_declarations.size(), 2u);
@@ -299,6 +300,17 @@ endmodule
   EXPECT_EQ(grouped(invs[0].expr), "(take -> available)");
   EXPECT_EQ(invs[1].location.line, 7);
   EXPECT_EQ(grouped(invs[1].expr), "(model(credits_0.taken) == (model(bank.inside[0]) + model(responses_0.held)))");
+}
+
+TEST(Parse, ProtocolReserved) {
+  // KL20: protocol statements are reserved for protocol invariants
+  try {
+    parse_string("kernlist_format 1;\nmodule m(a);\n  input a;\n  protocol bank_ports: KOfN(k = 2);\nendmodule\n");
+    FAIL();
+  } catch (const parse_error& e) {
+    EXPECT_EQ(e.line, 4);
+    EXPECT_NE(std::string(e.what()).find("protocol statements are reserved"), std::string::npos) << e.what();
+  }
 }
 
 TEST(Parse, SyntaxErrorPosition) {

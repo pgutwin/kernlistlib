@@ -21,7 +21,8 @@ namespace verilog {
                                TAO_PEGTL_STRING("module"), TAO_PEGTL_STRING("input"),
                                TAO_PEGTL_STRING("output"), TAO_PEGTL_STRING("wire"),
                                TAO_PEGTL_STRING("assign"), TAO_PEGTL_STRING("invariant"),
-                               TAO_PEGTL_STRING("variant"), TAO_PEGTL_STRING("model") >,
+                               TAO_PEGTL_STRING("variant"), TAO_PEGTL_STRING("model"),
+                               TAO_PEGTL_STRING("protocol") >,
                           not_at< ident_other > > {};
     struct ident_normal : seq< not_at< keyword >, ident_first, star< ident_other > > {};
     // Verilog: a backslash, then any printable characters, ended by white space
@@ -71,6 +72,7 @@ namespace verilog {
     struct kw_variant : kw< TAO_PEGTL_STRING("variant") > {};
     struct kw_invariant : kw< TAO_PEGTL_STRING("invariant") > {};
     struct kw_model : kw< TAO_PEGTL_STRING("model") > {};
+    struct kw_protocol : kw< TAO_PEGTL_STRING("protocol") > {};
 
     // ---- numbers
     struct decimal : plus< digit > {};
@@ -148,7 +150,11 @@ namespace verilog {
 
     struct invariant : if_must< kw_invariant, token< invariant_name >, colon, expression, semi > {};
 
-    struct module_item : sor< declaration, continuous_assign, invariant, instantiation > {};
+    // KL20: reserved for Bluespec-type protocol invariants; not yet supported, so always an error
+    struct protocol_not_supported : failure {};
+    struct protocol : seq< kw_protocol, must< protocol_not_supported > > {};
+
+    struct module_item : sor< declaration, continuous_assign, invariant, protocol, instantiation > {};
     struct module_end : kw_endmodule {};
     struct module : if_must< kw_module, token< module_name >, lparen, opt< port_list >, rparen, semi,
                              star< module_item >, module_end > {};

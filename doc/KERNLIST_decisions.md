@@ -275,3 +275,19 @@ invariants) are bound so that a change through them changes the
 netlist. The container gains Python 3.11, since Rocky Linux 8's own
 Python is 3.6.
 
+**KL20. The keyword `protocol` is reserved for protocol invariants; a
+`protocol` statement is an error until they are specified.** Decided by
+the owner, from three options: (A) reserve the keyword now, build
+nothing; (B) note the need only; (C) design the statement fully now.
+A was chosen. Background (kern-design-examples DE24): the `invariant`
+statement holds facts about the design, for checking; the
+Bluespec-derived protocol invariants of the theory (Regime 2:
+`SameCycleVisibility`, `ConflictFree`, `KOfN`, ...) tell KERN what to
+build and preserve, with fields that a fact cannot carry, so they need a
+sibling statement. Reserving the keyword guarantees the room: no design
+can use `protocol` as a name, and a file that uses the statement gets
+"protocol statements are reserved for protocol invariants and not yet
+supported". Its form, for example `protocol bank_ports: KOfN(k = 2,
+members = {...}, priority = age(req_age));`, is to be designed when an
+example design needs one.
+

@@ -61,7 +61,8 @@
 
 ; Lexical notes (found while checking the test set, tests/kernlists):
 ; - Keywords are not identifiers: module endmodule input output wire assign variant invariant
-;   model kernlist_format.
+;   model protocol kernlist_format. protocol is reserved (KL20): a statement starting with it is
+;   an error until protocol invariants are specified.
 ; - "&&" and "||" are single tokens, as in Verilog, and are not allowed anywhere: a&&b is an
 ;   error, not a & &b. Write a & &b (with a space) for an and with an and-reduction.
 ; - A decimal number followed by "'" is a <sized_number>, never an <unsigned_decimal> followed

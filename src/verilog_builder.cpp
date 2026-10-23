@@ -68,7 +68,7 @@ namespace verilog {
     // Check if it's a keyword
     static const std::vector<std::string> keywords = {
       "kernlist_format", "module", "endmodule", "input", "output", "wire", "assign",
-      "variant", "invariant", "model"
+      "variant", "invariant", "model", "protocol"
     };
     
     if (std::find(keywords.begin(), keywords.end(), name) != keywords.end()) {

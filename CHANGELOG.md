@@ -107,6 +107,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `KERNLISTLIB_PYTHON` (on by default). The container gains Python 3.11 with its headers, set as
   `python3`. README gains a Python example; `.gitignore` gains `__pycache__/`.
 
+- kern-design-examples session: format decision KL20, the keyword `protocol` reserved for
+  protocol invariants: not usable as a name, and a `protocol` statement is rejected with a message
+  saying so; grammar, writer's escaping, reference grammar and `doc/kernlist.bnf` updated; one
+  test file and one test (64 tests).
+
+- kern-design-examples session: each logic group lists its pieces, `LogicGroup.pieces`: every
+  operator expression with nothing but wiring above it, with the bits it drives (`DrivenBit`: a
+  signal's bit, or a bit of a motif input driven directly); in the Python bindings too. Needed by
+  kern-floorplan's kernlist reader to compute a group's figures. One C++ test, one Python check
+  (65 tests).
+
 ### Removed
 - kern-design-examples session: `tests/test_verilog.cpp.bak`, a leftover.
 - kern-design-examples session: `include/verilog_actions.hpp`, veriloglib's reader actions,

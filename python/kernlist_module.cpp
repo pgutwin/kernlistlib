@@ -244,12 +244,24 @@ PYBIND11_MODULE(kernlist, m) {
     .def_readonly("message", &Problem::message)
     .def("__repr__", [](const Problem& p) { return "<line " + std::to_string(p.line) + ": " + p.message + ">"; });
 
+  py::class_<DrivenBit>(m, "DrivenBit")
+    .def_readonly("signal", &DrivenBit::signal)
+    .def_readonly("index", &DrivenBit::index)
+    .def_readonly("port", &DrivenBit::port)
+    .def("__repr__", [](const DrivenBit& b) { return "<" + b.signal + "[" + std::to_string(b.index) + "]>"; });
+  py::class_<GroupPiece>(m, "GroupPiece")
+    .def_readonly("expr", &GroupPiece::expr)
+    .def_readonly("drives", &GroupPiece::drives)
+    .def_readonly("location", &GroupPiece::location)
+    .def("__repr__", [](const GroupPiece& p) { return "<piece " + write_expr(p.expr) + ">"; });
+
   py::class_<LogicGroup>(m, "LogicGroup")
     .def_readonly("name", &LogicGroup::name)
     .def_readonly("outputs", &LogicGroup::outputs)
     .def_readonly("inputs", &LogicGroup::inputs)
     .def_readonly("operations", &LogicGroup::operations)
     .def_readonly("statements", &LogicGroup::statements)
+    .def_readonly("pieces", &LogicGroup::pieces)
     .def("__repr__", [](const LogicGroup& g) { return "<group " + g.name + ", " + std::to_string(g.operations) + " operation(s)>"; });
 
   // ---- functions

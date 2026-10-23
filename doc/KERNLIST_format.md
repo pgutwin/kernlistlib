@@ -248,6 +248,9 @@ one.
 
 ## 3. Not decided
 
+- Protocol invariants (the Bluespec-derived kinds of KERN's Regime 2):
+  the keyword `protocol` is reserved for their statement, and a
+  `protocol` statement is rejected until it is specified (KL20).
 - Invariants across clock cycles (bounded, as "within N").
 - How invariants written in Chisel reach the kernlist (the front end, in
   kern-design-examples).

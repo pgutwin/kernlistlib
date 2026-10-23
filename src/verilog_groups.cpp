@@ -232,12 +232,15 @@ namespace verilog {
     std::vector<LogicGroup> groups;
     std::map<size_t, size_t> group_of_root;
     std::vector<size_t> group_of_piece(b.pieces.size());
+    std::vector<size_t> piece_index(b.pieces.size());     // a piece's place in its group's pieces
     for (size_t i = 0; i < b.pieces.size(); ++i) {
       auto [it, added] = group_of_root.emplace(find(i), groups.size());
       if (added) groups.emplace_back();
       group_of_piece[i] = it->second;
       LogicGroup& g = groups[it->second];
       g.operations += b.pieces[i].operations;
+      g.pieces.push_back(GroupPiece{ *b.pieces[i].expr, {}, b.pieces[i].location });
+      piece_index[i] = g.pieces.size() - 1;
       if (std::find_if(g.statements.begin(), g.statements.end(), [&](const Location& l) {
             return l.line == b.pieces[i].location.line && l.column == b.pieces[i].location.column; }) == g.statements.end())
         g.statements.push_back(b.pieces[i].location);
@@ -253,6 +256,7 @@ namespace verilog {
     std::vector<std::vector<const Target*>> first_target(groups.size());
     for (const auto& t : targets) {
       size_t g = group_of_piece[t.piece];
+      groups[g].pieces[piece_index[t.piece]].drives.push_back(DrivenBit{ t.signal, t.index, t.port });
       auto& list = driven[g];
       auto it = std::find_if(list.begin(), list.end(), [&](const auto& p) { return p.first == t.signal; });
       if (it == list.end()) { list.push_back({ t.signal, {} }); first_target[g].push_back(&t); it = list.end() - 1; }

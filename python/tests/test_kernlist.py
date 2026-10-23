@@ -61,6 +61,9 @@ class CheckingAndGroups(unittest.TestCase):
         self.assertEqual(len(groups), 14)
         self.assertEqual(groups[0].name, "eligible[3]")
         self.assertEqual(groups[0].inputs, ["requests_fifo_3_deqValid", "credits_3_available"])
+        piece = groups[0].pieces[0]
+        self.assertEqual(kernlist.write_expr(piece.expr), "requests_fifo_3_deqValid & credits_3_available")
+        self.assertEqual([(b.signal, b.index) for b in piece.drives], [("eligible", 3)])
 
 
 class Changing(unittest.TestCase):

@@ -127,6 +127,7 @@ namespace verilog {
     KL_MESSAGE(connections_end, "expected a connection by name, as .port(signal), or ')'");
     KL_MESSAGE(token< connection_port >, "expected a port name");
     KL_MESSAGE(token< invariant_name >, "expected the invariant's name");
+    KL_MESSAGE(protocol_not_supported, "protocol statements are reserved for protocol invariants and not yet supported");
 #undef KL_MESSAGE
 
     template< typename Rule >
