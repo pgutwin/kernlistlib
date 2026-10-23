@@ -6,16 +6,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### kernlistlib
-- Forked from veriloglib at `6f02bcc` (KL01). Added `CLAUDE.md`,
-  `doc/KERNLIST_decisions.md`, a README preamble, and the build
-  environment `containers/kernlistlib.def` (KL02).
-- Baseline, the code as forked: builds and passes all 39 tests with
-  GCC 13.3, CMake 3.28 and Ninja in Claude's workspace (2026-10-23).
-  In the container on the production platform: not yet confirmed.
-
-### veriloglib, before the fork
-
 ### Changed
 - Reformatted all the files with proper indentation.
 - **BREAKING**: `Expr` variant now includes `Number` as first alternative (#3)
@@ -34,6 +24,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Fixed issue #1: input and output statements cannot handel comma seperated lists
 - Parser failures on escaped identifiers (backslash-prefixed) (#3)
+
+## [n/a] 23 October 2026
+
+### Added
+- kern-design-examples session: forked from veriloglib at `6f02bcc` as kernlistlib (KL01).
+- kern-design-examples session: `CLAUDE.md`, `doc/KERNLIST_decisions.md` and a README preamble.
+- kern-design-examples session: build environment `containers/kernlistlib.def`, from the owner's
+  Apptainer example (KL02).
+- kern-design-examples session: baseline confirmed. The code as forked builds and passes all 39
+  tests in Claude's workspace (GCC 13.3, CMake 3.28, Ninja) and in the container on the owner's
+  Linux platform.
+
+### Removed
+- kern-design-examples session: `tests/test_verilog.cpp.bak`, a leftover.
 
 ## [n/a] 20 November 2025
 

@@ -24,6 +24,9 @@ Nothing is decided except what the decision log records.
   one short entry per decision, numbered KL01, KL02, ... Other
   repositories' decisions keep their numbers: "kern-design-examples
   DE22", "motif library D43".
+- Record every change in `CHANGELOG.md` under `## [n/a] <D Month YYYY>`
+  (reuse today's heading), with `### Added/Changed/Removed/Fixed`,
+  bullets prefixed with the session name.
 - Git: stage changes freely. Never commit, amend, rebase or push; the
   owner reviews and commits. Commit messages proposed to the owner
   contain no double quotes or backticks.
@@ -39,7 +42,7 @@ Nothing is decided except what the decision log records.
   versions; that checks the code, not glibc compatibility. The owner
   builds the container and runs the tests on his production Linux
   platform at milestones; the CHANGELOG records which milestones have
-  been confirmed there.
+  been confirmed there. Baseline confirmed 2026-10-23.
 
 ## Copies from other repositories
 
