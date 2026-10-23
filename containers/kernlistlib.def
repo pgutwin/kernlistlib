@@ -1,0 +1,60 @@
+Bootstrap: docker
+From: rockylinux:8
+
+# kernlistlib build environment (KL02): Rocky Linux 8 gives glibc 2.28, which the commercial
+# EDA tools this code runs beside require; GCC 13 from gcc-toolset-13 gives C++20.
+# Every dependency added to the code is added here in the same change.
+
+%post
+    dnf -y install dnf-plugins-core
+    dnf config-manager --set-enabled powertools
+
+    dnf -y groupinstall "Development Tools"
+
+    # cmake 3.26, bison 3.0.4 and flex come from AppStream / Development Tools;
+    # ninja-build comes from PowerTools.
+    dnf -y install \
+        cmake \
+        ninja-build \
+        bison \
+        flex \
+        git \
+        python3 \
+        which \
+        make \
+        glibc-devel
+
+    # Newer compiler for C++20
+    dnf -y install gcc-toolset-13
+
+    # Cluster requirement
+    mkdir -p /imec
+
+    dnf clean all
+
+%environment
+    # Select the C++20-capable compiler and matching binutils explicitly.
+    # This avoids falling back to Rocky Linux 8's GCC 8 toolchain or mixing
+    # GCC 13 with the system assembler.
+    export PATH=/opt/rh/gcc-toolset-13/root/usr/bin:$PATH
+    export CC=/opt/rh/gcc-toolset-13/root/usr/bin/gcc
+    export CXX=/opt/rh/gcc-toolset-13/root/usr/bin/g++
+    export AS=/opt/rh/gcc-toolset-13/root/usr/bin/as
+    export LD=/opt/rh/gcc-toolset-13/root/usr/bin/ld
+    export CMAKE_GENERATOR=Ninja
+
+%test
+    test "$(command -v gcc)" = "/opt/rh/gcc-toolset-13/root/usr/bin/gcc"
+    test "$(command -v g++)" = "/opt/rh/gcc-toolset-13/root/usr/bin/g++"
+    test "$(command -v as)" = "/opt/rh/gcc-toolset-13/root/usr/bin/as"
+    gcc --version
+    g++ --version
+    as --version
+    cmake --version
+    ninja --version
+    bison --version
+    flex --version
+
+%runscript
+    exec "$@"
+    

@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### kernlistlib
+- Forked from veriloglib at `6f02bcc` (KL01). Added `CLAUDE.md`,
+  `doc/KERNLIST_decisions.md`, a README preamble, and the build
+  environment `containers/kernlistlib.def` (KL02).
+- Baseline, the code as forked: builds and passes all 39 tests with
+  GCC 13.3, CMake 3.28 and Ninja in Claude's workspace (2026-10-23).
+  In the container on the production platform: not yet confirmed.
+
+### veriloglib, before the fork
+
 ### Changed
 - Reformatted all the files with proper indentation.
 - **BREAKING**: `Expr` variant now includes `Number` as first alternative (#3)

@@ -1,3 +1,23 @@
+# kernlistlib
+
+The parser, writer and validator for the **kernlist**, KERN's
+description of a design as motif instances, the logic between them and
+their connections. A fork of veriloglib at commit `6f02bcc`; the
+kernlist format extends veriloglib's structural Verilog subset with
+KERN's concepts. The format is not yet specified: what follows below
+is veriloglib's README as it was at the fork, and describes the code
+until the kernlist changes begin. Decisions: `doc/KERNLIST_decisions.md`.
+
+Build environment: `containers/kernlistlib.def` (Apptainer; Rocky
+Linux 8, glibc 2.28, GCC 13):
+
+    apptainer build kernlistlib.sif containers/kernlistlib.def
+    apptainer exec kernlistlib.sif cmake -S . -B build
+    apptainer exec kernlistlib.sif cmake --build build -j
+    apptainer exec kernlistlib.sif ctest --test-dir build --output-on-failure
+
+---
+
 # Verilog Parser & Writer (C++ / PEGTL)
 
 This repository provides a lightweight Verilog parser and writer implemented in C++20 using [PEGTL](https://github.com/taocpp/PEGTL) and tested with GoogleTest. It is aimed at **structural Verilog** use‑cases: module headers, declarations, continuous assignments, and simple module instantiations.
