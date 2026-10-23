@@ -1,0 +1,6 @@
+// EXPECT checking: -> must be the outermost operator of an invariant (KL10, KL13).
+kernlist_format 1;
+module m (a, b, c);
+  input a, b, c;
+  invariant nested: (a -> b) & c;
+endmodule

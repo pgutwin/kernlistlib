@@ -54,14 +54,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tests in Claude's workspace (GCC 13.3, CMake 3.28, Ninja) and in the container on the owner's
   Linux platform.
 - kern-design-examples session: `tests/kernlists/`, the test set: 10 files that must be accepted
-  (including the request side and the full port, derived from kern-design-examples) and 31 that
+  (including the request side and the full port, derived from kern-design-examples) and 32 that
   must be rejected, each with its expected failure; `tests/kernlists/reference/`, the grammar in
   Lark with a script that checks the test set against it.
 
 ### Changed
+- kern-design-examples session: format decision KL13 (the reader accepts one expression language
+  everywhere; checking rejects arithmetic, ordered comparisons, unsized numbers, `model(...)` and
+  `->` outside invariants, with messages naming the rule), in `doc/KERNLIST_format.md` and
+  `doc/kernlist.bnf`; the test set and its reference reader follow it.
 - kern-design-examples session: `doc/kernlist.bnf` gains lexical notes found with the test set:
-  keywords are not identifiers; `&&` and `||` are tokens and not allowed; a sized number in an
-  invariant.
+  keywords are not identifiers; `&&`, `||` and `->` are single tokens; a sized number is one
+  constant.
 
 ### Removed
 - kern-design-examples session: `tests/test_verilog.cpp.bak`, a leftover.

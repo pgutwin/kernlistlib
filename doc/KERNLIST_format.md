@@ -98,9 +98,22 @@ Expressions may use only (KL08):
 | grouping | `( ... )` |
 
 Not allowed: arithmetic (`+ - * / %`), ordered comparisons
-(`< > <= >=`), shifts, and anything else. Anything the motif library
-has a family for (an adder, for example) is written as a motif
-instance, never as an operator.
+(`< > <= >=`), shifts, unsized numbers, and anything else. Anything the
+motif library has a family for (an adder, for example) is written as a
+motif instance, never as an operator.
+
+How these limits are enforced (KL13): the reader accepts one expression
+language everywhere, the one of invariants (2.6). Checking then rejects
+`+ -`, `< <= > >=`, unsized numbers, `model(...)` and `->` in `assign`
+and connections, with a message that names the rule:
+
+```
+line 6: + and - are arithmetic, allowed only in invariant statements,
+in assign; use a motif
+```
+
+Forms in no part of the format (`* / %`, shifts, `&&`, `||`) are
+rejected by the reader.
 
 The kernlist holds the logic exactly and nothing derived from it. Tools
 that need to place or cost the logic work out its **groups** by one
@@ -158,8 +171,10 @@ and in addition:
 | `model(instance.name)` | a value of the instance's model, as its family's contract names it (an integer, for counts) |
 | `+ -` and `< <= > >= == !=` | arithmetic and comparison on model values |
 
-Each invariant must hold in every clock cycle after reset. These forms
-appear only in `invariant` statements, never in `assign`. Tools that
+`->` is allowed only as the outermost operator of an invariant, at most
+once. Each invariant must hold in every clock cycle after reset. These
+forms appear only in `invariant` statements, never in `assign` or a
+connection; checking enforces that (KL13). Tools that
 want only the circuit skip `invariant` statements.
 
 ### 2.7 What reading, checking and linking each do (KL11)
@@ -167,7 +182,7 @@ want only the circuit skip `invariant` statements.
 | Layer | Needs | Does | In kernlistlib |
 |---|---|---|---|
 | reading | the file | syntax: the format line, modules, declarations, instances with `variant`, `assign`, `invariant` | yes |
-| checking one file | the file | names declared before use; KL08's limits in `assign`; the forms of 2.6 only inside `invariant`; the format version; the logic groups of 2.4 | yes |
+| checking one file | the file | the format version; names declared before use, and declared once (ports, wires, instances, invariants, modules); KL08's limits in `assign` and connections, and the forms of 2.6 only in `invariant` (KL13); no `variant` on an instance of a module in the same file; the logic groups of 2.4 | yes |
 | linking | the file, other modules, the motif library | resolving each instantiated name to a module or a family (unresolved names are an error here); parameters and port names against the family; handshake ends and pairs (2.5); model names in invariants | later; until then, the flow's tools |
 
 ### 2.8 Forms (KL12)

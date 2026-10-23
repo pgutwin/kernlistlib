@@ -1,4 +1,4 @@
-// EXPECT reading: model(...) is allowed only in invariant statements (KL10).
+// EXPECT checking: model(...) is allowed only in invariant statements (KL10).
 kernlist_format 1;
 module m ();
   credit_counter #(.LIMIT(2)) credits (.take(1'b0), .give(1'b0), .available());

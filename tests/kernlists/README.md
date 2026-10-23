@@ -7,6 +7,11 @@ has one fault and starts with a line saying how it must fail:
     // EXPECT reading: ...    the grammar rejects it
     // EXPECT checking: ...   it reads, and the one-file checks reject it
 
+Forms allowed only in invariants (arithmetic, ordered comparisons,
+unsized numbers, `model(...)`, `->`) are read everywhere and rejected by
+checking outside invariants, so that the message can name the rule
+(KL13).
+
 Files in `valid/` must read and check without a problem.
 
 None of these files are copies. The two designs are **derived** from
@@ -37,16 +42,16 @@ be edited here freely.
 | `format_line_twice.kl` | reading | two format lines |
 | `format_version_2.kl` | checking | version 2 is not known |
 | `no_module.kl` | reading | no module |
-| `plus_in_assign.kl` | reading | `+` in `assign` |
-| `minus_in_connection.kl` | reading | `-` in a connection |
-| `less_than_in_assign.kl` | reading | `<` in `assign` |
+| `plus_in_assign.kl` | checking | `+` in `assign` |
+| `minus_in_connection.kl` | checking | `-` in a connection |
+| `less_than_in_assign.kl` | checking | `<` in `assign` |
 | `shift_in_assign.kl` | reading | `<<` in `assign` |
-| `unsized_constant_in_assign.kl` | reading | `1` instead of `1'b1` |
+| `unsized_constant_in_assign.kl` | checking | `1` instead of `1'b1` |
 | `logical_and_in_assign.kl` | reading | `&&` |
 | `logical_or_in_connection.kl` | reading | `\|\|` |
-| `implication_in_assign.kl` | reading | `->` outside an invariant |
-| `model_in_assign.kl` | reading | `model(...)` in `assign` |
-| `model_in_connection.kl` | reading | `model(...)` in a connection |
+| `implication_in_assign.kl` | checking | `->` outside an invariant |
+| `model_in_assign.kl` | checking | `model(...)` in `assign` |
+| `model_in_connection.kl` | checking | `model(...)` in a connection |
 | `variant_without_name.kl` | reading | `variant` with no name |
 | `variant_before_parameters.kl` | reading | `variant` before `#(...)` |
 | `parameter_not_a_number.kl` | reading | `.W(WIDTH)` |
@@ -55,6 +60,7 @@ be edited here freely.
 | `inout_port.kl` | reading | `inout` |
 | `invariant_without_name.kl` | reading | no name and colon |
 | `implication_chained.kl` | reading | `a -> b -> c` |
+| `implication_not_outermost.kl` | checking | `(a -> b) & c` |
 | `undeclared_name.kl` | checking | a name never declared |
 | `used_before_declared.kl` | checking | a name used before its declaration |
 | `declared_twice.kl` | checking | a wire declared twice |

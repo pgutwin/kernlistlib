@@ -1,4 +1,4 @@
-// EXPECT reading: - is arithmetic, not allowed in a connection (KL08).
+// EXPECT checking: - is arithmetic, not allowed in a connection (KL08).
 kernlist_format 1;
 module m (a, b);
   input [3:0] a, b;

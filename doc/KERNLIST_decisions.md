@@ -164,3 +164,23 @@ kernlistlib; (C) the text form and bindings only for now, a JSON
 conversion added later if a tool needs one. C was chosen: the bindings
 cover the Python tools, and the content is small and fixed, so a JSON
 form is easy to add when a need appears.
+
+**KL13. The reader accepts one expression language everywhere;
+checking enforces KL08's limits.** Decided by the owner, from two
+options: (A) the grammar has two expression languages, so the reader
+rejects arithmetic, ordered comparisons, unsized numbers, `model(...)`
+and `->` outside invariants, with a syntax error ("unexpected `+` at
+line 6 col 16"); (B) the reader accepts the invariant language in
+`assign`, connections and invariants alike, and checking rejects those
+forms outside invariants with a message naming the rule ("`+` is
+arithmetic, allowed only in invariant statements; use a motif"). B was
+chosen: a designer who writes `+` is better served by being told why it
+is not allowed and what to use instead. The grammar becomes simpler
+(one expression language, with Verilog's precedence), and checking gets
+one more rule. Found while writing the test set (`tests/kernlists`),
+whose reference reader showed the specification (checking) and the
+grammar (reading) disagreeing; with B the seven affected test files
+fail in checking with such messages, and `->` below an invariant's
+outermost operator is a checking error too. Forms that are in no part
+of the format (`* / %`, shifts, `&&`, `||`) are still rejected by the
+reader.

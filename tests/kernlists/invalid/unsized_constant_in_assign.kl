@@ -1,4 +1,4 @@
-// EXPECT reading: constants in assign must be sized, as 1'b1 (KL08).
+// EXPECT checking: constants outside invariants must be sized, as 1'b1 (KL08, KL13).
 kernlist_format 1;
 module m (y);
   output y;

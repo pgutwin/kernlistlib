@@ -16,6 +16,34 @@ def names_used(tree):
         if t.data == "lvalue" and isinstance(t.children[0], Token):
             yield str(t.children[0])
 
+INVARIANT_ONLY = {
+    "arithmetic": "+ and - are arithmetic",
+    "ordered_comparison": "< <= > >= are ordered comparisons",
+    "unsized_number": "an unsized number (write a sized constant such as 1'b1)",
+    "model_ref": "model(...) refers to a motif's model",
+    "implication": "-> is implication",
+}
+
+def invariant_only_forms(expr, where, top_level_ok):
+    """Problems for forms KL08 does not allow outside invariants (KL13), and -> below the top."""
+    problems = []
+    if not isinstance(expr, Tree):
+        if isinstance(expr, Token) and expr.type == "UNSIGNED" and where != "invariant":
+            problems.append(f"{INVARIANT_ONLY['unsized_number']}, allowed only in invariant statements, in {where}")
+        return problems
+    if expr.data == "implication" and where == "invariant" and not top_level_ok:
+        problems.append("-> is allowed only as the outermost operator of an invariant")
+    if expr.data in INVARIANT_ONLY and where != "invariant":
+        problems.append(f"{INVARIANT_ONLY[expr.data]}, allowed only in invariant statements, in {where}"
+                        + ("; use a motif" if expr.data in ("arithmetic", "ordered_comparison") else ""))
+    for c in expr.children:
+        if expr.data in ("select", "replicate", "model_ref") and isinstance(c, Token):
+            continue  # indices and counts are not values
+        if expr.data in ("name", "unsized_number"):
+            continue
+        problems += invariant_only_forms(c, where, False)
+    return problems
+
 def check(tree):
     """One-file checks. Returns a list of problems."""
     problems = []
@@ -52,6 +80,9 @@ def check(tree):
                 if inst in instances:
                     problems.append(f"instance {inst} defined twice")
                 instances.add(inst)
+                for conn in item.find_data("connection"):
+                    if len(conn.children) > 1 and conn.children[1] is not None:
+                        problems += invariant_only_forms(conn.children[1], f"connection .{conn.children[0]} of {inst}", False)
                 for n in names_used(item):
                     if n not in declared:
                         problems.append(f"{n} used before it is declared")
@@ -60,10 +91,13 @@ def check(tree):
                 if name in invariants:
                     problems.append(f"invariant {name} defined twice")
                 invariants.add(name)
+                problems += invariant_only_forms(item.children[1], "invariant", True)
                 for n in names_used(item):
                     if n not in declared:
                         problems.append(f"{n} used before it is declared")
             else:  # continuous_assign
+                for a in item.find_data("assignment"):
+                    problems += invariant_only_forms(a.children[1], "assign", False)
                 for n in names_used(item):
                     if n not in declared:
                         problems.append(f"{n} used before it is declared")

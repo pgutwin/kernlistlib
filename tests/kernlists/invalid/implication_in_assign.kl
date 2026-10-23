@@ -1,4 +1,4 @@
-// EXPECT reading: -> is allowed only in invariant statements (KL10).
+// EXPECT checking: -> is allowed only in invariant statements (KL10).
 kernlist_format 1;
 module m (a, b, y);
   input a, b;

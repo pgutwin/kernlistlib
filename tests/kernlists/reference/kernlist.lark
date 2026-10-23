@@ -21,12 +21,20 @@ parameters: "#" "(" parameter ("," parameter)* ")"
 parameter: "." IDENT "(" UNSIGNED ")"
 connection: "." IDENT "(" [expression] ")"
 
-?expression: or_expr | or_expr "?" expression ":" expression -> choice
+// One expression language everywhere (KL13). The reader accepts it all; the checker allows
+// arithmetic, ordered comparisons, unsized numbers, model(...) and -> only in invariants.
+// Precedence, lowest first: ->  ?:  |  ^  &  == !=  < <= > >=  + -  unary  primary
+?expression: choice | choice "->" choice -> implication
+?choice: or_expr | or_expr "?" choice ":" choice -> choice
 ?or_expr: xor_expr | or_expr OR xor_expr -> or_
 ?xor_expr: and_expr | xor_expr "^" and_expr -> xor
 ?and_expr: eq_expr | and_expr AND eq_expr -> and_
-?eq_expr: unary | unary EQOP unary -> equality
+?eq_expr: rel_expr | rel_expr EQOP rel_expr -> equality
 EQOP: "==" | "!="
+?rel_expr: sum | sum RELOP sum -> ordered_comparison
+RELOP: "<=" | ">=" | "<" | ">"
+?sum: unary | sum SUMOP unary -> arithmetic
+SUMOP: /\+|-(?!>)/
 ?unary: primary | UNOP primary -> unary_op
 UNOP: "~" | AND | OR | "^"
 // && and || are single tokens in Verilog, so a&&b is not a & &b; neither is allowed
@@ -34,19 +42,15 @@ AND: /&(?!&)/
 OR: /\|(?!\|)/
 ?primary: name
         | SIZED
+        | UNSIGNED -> unsized_number
+        | model_ref
         | "{" expression ("," expression)* "}" -> concat
         | "{" UNSIGNED "{" expression ("," expression)* "}" "}" -> replicate
         | "(" expression ")"
 name: IDENT [select]
 select: "[" UNSIGNED [":" UNSIGNED] "]"
 
-invariant: "invariant" IDENT ":" inv_expression ";"
-?inv_expression: inv_compare | inv_compare "->" inv_compare -> implication
-?inv_compare: inv_sum | inv_sum CMPOP inv_sum -> comparison
-CMPOP: "==" | "!=" | "<=" | ">=" | "<" | ">"
-?inv_sum: inv_term | inv_sum SUMOP inv_term -> sum
-SUMOP: "+" | "-"
-?inv_term: model_ref | UNSIGNED -> number | expression
+invariant: "invariant" IDENT ":" expression ";"
 model_ref: "model" "(" IDENT "." IDENT [select] ")"
 
 SIZED: /[0-9]+'[bBoOdDhH][0-9a-fA-FxXzZ_]+/
