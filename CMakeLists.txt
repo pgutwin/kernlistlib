@@ -41,3 +41,22 @@ target_compile_definitions(verilog_tests PRIVATE KERNLISTS_DIR="${CMAKE_CURRENT_
 target_link_libraries(verilog_tests PRIVATE veriloglib GTest::gtest_main)
 include(GoogleTest)
 gtest_discover_tests(verilog_tests)
+
+# Python bindings (KL19): the module kernlist. Needs Python 3 with its development files.
+option(KERNLISTLIB_PYTHON "Build the Python bindings" ON)
+if(KERNLISTLIB_PYTHON)
+  set(PYBIND11_FINDPYTHON ON)
+  find_package(Python 3.8 COMPONENTS Interpreter Development.Module REQUIRED)
+  FetchContent_Declare(
+    pybind11
+    GIT_REPOSITORY https://github.com/pybind/pybind11.git
+    GIT_TAG v2.13.6
+  )
+  FetchContent_MakeAvailable(pybind11)
+  pybind11_add_module(kernlist python/kernlist_module.cpp)
+  target_link_libraries(kernlist PRIVATE veriloglib)
+  add_test(NAME python_bindings
+           COMMAND ${Python_EXECUTABLE} -m unittest discover -s ${CMAKE_CURRENT_SOURCE_DIR}/python/tests -v)
+  set_tests_properties(python_bindings PROPERTIES
+           ENVIRONMENT "PYTHONPATH=$<TARGET_FILE_DIR:kernlist>;KERNLISTS_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tests/kernlists")
+endif()

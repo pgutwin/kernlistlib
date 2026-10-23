@@ -70,7 +70,7 @@ include/  src/               the library and the command-line tool (vparse); the
                              checking one file src/verilog_checker.cpp,
                              logic groups src/verilog_groups.cpp
 tests/                       unit tests; tests/kernlists/ the kernlist test set (README there)
-python/                      Python bindings (to come)
+python/                      Python bindings (the module kernlist) and their tests
 ```
 
 Directories are created when they first get content.

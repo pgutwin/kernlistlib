@@ -100,6 +100,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   drives) and KL18 (selects and concatenations are wiring everywhere, so groups follow the
   circuit), with 2.4 rewritten; 7 tests (62 tests).
 
+- kern-design-examples session: Python bindings (KL19), `python/kernlist_module.cpp`, built with
+  pybind11 2.13.6 as the module `kernlist`: `read`, `read_string`, `write`, `write_expr`,
+  `check`, `logic_groups`, `ParseError` with line and column, and every class of the data model,
+  changeable in place; 9 Python tests in `python/tests`, run by ctest. CMake option
+  `KERNLISTLIB_PYTHON` (on by default). The container gains Python 3.11 with its headers, set as
+  `python3`. README gains a Python example; `.gitignore` gains `__pycache__/`.
+
 ### Removed
 - kern-design-examples session: `tests/test_verilog.cpp.bak`, a leftover.
 - kern-design-examples session: `include/verilog_actions.hpp`, veriloglib's reader actions,

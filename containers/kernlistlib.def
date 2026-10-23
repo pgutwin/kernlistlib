@@ -20,12 +20,18 @@ From: rockylinux:8
         flex \
         git \
         python3 \
+        python3.11 \
+        python3.11-devel \
         which \
         make \
         glibc-devel
 
     # Newer compiler for C++20
     dnf -y install gcc-toolset-13
+
+    # Python bindings (KL19) need Python 3.8 or later with its headers; Rocky Linux 8's own
+    # python3 is 3.6, so python3 is pointed at 3.11.
+    alternatives --set python3 /usr/bin/python3.11
 
     # Cluster requirement
     mkdir -p /imec
@@ -54,6 +60,8 @@ From: rockylinux:8
     ninja --version
     bison --version
     flex --version
+    python3 --version
+    python3 -c "import sysconfig, os; assert os.path.exists(os.path.join(sysconfig.get_paths()['include'], 'Python.h'))"
 
 %runscript
     exec "$@"

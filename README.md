@@ -17,6 +17,23 @@ out of date and will be rewritten once the format settles.
 
     ./build/vparse path/to/file.kl
 
+Python (KL19), from the build directory or with it on `PYTHONPATH`:
+
+```python
+import kernlist
+nl = kernlist.read("design.kl")              # kernlist.ParseError has .line and .column
+for p in kernlist.check(nl):                 # every problem, with its line
+    print(p.line, p.message)
+m = nl.modules[0]
+for g in kernlist.logic_groups(m):           # the logic groups, named after what they drive
+    print(g.name, g.inputs, g.outputs)
+m.module_instances[0].variant = "circular_buffer"   # changes the netlist in place
+print(kernlist.write(nl))
+```
+
+The bindings are built by default and need Python 3.8 or later with its
+development files; `-DKERNLISTLIB_PYTHON=OFF` leaves them out.
+
 Build environment: `containers/kernlistlib.def` (Apptainer; Rocky
 Linux 8, glibc 2.28, GCC 13):
 

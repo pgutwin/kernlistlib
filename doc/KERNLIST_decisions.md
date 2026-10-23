@@ -261,3 +261,17 @@ firtool's netlist). Also made exact while implementing, within the
 rule's intent: operations join through wires between statements, not
 only within one statement, since a wire between them is only a name.
 
+**KL19. The Python bindings mirror the C++ data model, for reading,
+checking, changing and writing.** Decided by the owner, from three
+options: (A) Python objects that mirror the C++ classes, expressions as
+objects to walk; (B) plain dictionaries and lists, expressions as text,
+read-only; (C) both. A was chosen: the flow's next tools (the
+floorplanner's input, KERN choosing variants) change a kernlist and
+write it back, which B could not do without a separate path into C++; a
+`to_dict()` can be added when a tool wants one. Built with pybind11 as
+the module `kernlist`; lists that tools change in place (modules,
+instances, parameters, connections, declarations, assignments,
+invariants) are bound so that a change through them changes the
+netlist. The container gains Python 3.11, since Rocky Linux 8's own
+Python is 3.6.
+
