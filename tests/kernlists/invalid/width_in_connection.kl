@@ -1,0 +1,7 @@
+// EXPECT checking: & of 1 bit and 2 bits in a connection (KL16).
+kernlist_format 1;
+module m (a, b);
+  input a;
+  input [1:0] b;
+  sink #(.W(2)) consume (.in(a & b));
+endmodule

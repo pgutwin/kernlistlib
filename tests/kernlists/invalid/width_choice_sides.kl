@@ -1,0 +1,8 @@
+// EXPECT checking: the two sides of ?: have 1 and 2 bits (KL16).
+kernlist_format 1;
+module m (c, a, b, y);
+  input c, a;
+  input [1:0] b;
+  output [1:0] y;
+  assign y = c ? a : b;
+endmodule

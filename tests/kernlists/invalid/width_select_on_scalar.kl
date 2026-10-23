@@ -1,0 +1,7 @@
+// EXPECT checking: a has no range, so a[0] is not allowed (KL16).
+kernlist_format 1;
+module m (a, y);
+  input a;
+  output y;
+  assign y = a[0];
+endmodule

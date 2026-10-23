@@ -69,17 +69,34 @@ be edited here freely.
 | `module_name_twice.kl` | checking | two modules with one name |
 | `invariant_name_twice.kl` | checking | two invariants with one name |
 | `variant_on_module_instance.kl` | checking | `variant` on an instance of a module in the same file |
+| `width_assign.kl` | checking | 4 bits assigned to 2 (KL16) |
+| `width_concatenation_assign.kl` | checking | 3 bits assigned to `{y, z}` (KL16) |
+| `width_operands.kl` | checking | `a[3] & a` (KL16) |
+| `width_equality.kl` | checking | 4 bits `==` 3 bits (KL16) |
+| `width_choice_condition.kl` | checking | a 2-bit condition of `?:` (KL16) |
+| `width_choice_sides.kl` | checking | sides of `?:` of 1 and 2 bits (KL16) |
+| `width_select_outside_range.kl` | checking | `a[4]` of `[3:0]` (KL16) |
+| `width_select_direction.kl` | checking | `a[0:3]` of `[3:0]` (KL16) |
+| `width_select_on_scalar.kl` | checking | `a[0]` of a name without a range (KL16) |
+| `width_constant_too_large.kl` | checking | `2'd5` (KL16) |
+| `width_in_connection.kl` | checking | `a & b` of 1 and 2 bits in a connection (KL16) |
+| `width_implication.kl` | checking | a 4-bit side of `->` (KL16) |
+| `width_invariant_not_one_bit.kl` | checking | an invariant 4 bits wide (KL16) |
+| `model_in_bitwise_logic.kl` | checking | a model value in `&` (KL16) |
 
 Not covered, because they need the motif library (linking, later):
 unknown families, wrong parameter or port names, outputs not connected to
-declared wires (KL04), handshake pairs, model names in invariants. Widths
-are not checked anywhere yet.
+declared wires (KL04), handshake pairs, model names in invariants, and
+the widths of motif ports.
+
+The C++ tests (`tests/test_kernlists.cpp`) read and check every file
+here and compare with its expectation.
 
 ## reference/
 
 `kernlist.lark` is `doc/kernlist.bnf` written for the Python parser Lark,
 and `check.py` reads and checks every file here with it and compares the
-result with the file's `EXPECT` line. It exists only to check the test set
-and the grammar before the C++ reader is written; the BNF is the
-specification. Run it with `python3 tests/kernlists/reference/check.py`
+result with the file's `EXPECT` line. It was used to check the test set, the grammar
+and the width rules before the C++ code was written; the BNF and
+`doc/KERNLIST_format.md` are the specification. Run it with `python3 tests/kernlists/reference/check.py`
 (needs `pip install lark`).

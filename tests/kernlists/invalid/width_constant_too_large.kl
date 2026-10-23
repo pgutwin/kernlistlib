@@ -1,0 +1,6 @@
+// EXPECT checking: 2'd5 does not fit in 2 bits (KL16).
+kernlist_format 1;
+module m (y);
+  output [1:0] y;
+  assign y = 2'd5;
+endmodule

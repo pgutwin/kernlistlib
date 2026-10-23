@@ -1,0 +1,7 @@
+// EXPECT checking: == compares 4 bits with 3 bits (KL16).
+kernlist_format 1;
+module m (a, y);
+  input [3:0] a;
+  output y;
+  assign y = a == 3'd1;
+endmodule

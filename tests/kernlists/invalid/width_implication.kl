@@ -1,0 +1,7 @@
+// EXPECT checking: a side of -> has 4 bits (KL16).
+kernlist_format 1;
+module m (a, b);
+  input [3:0] a;
+  input b;
+  invariant wide: a -> b;
+endmodule

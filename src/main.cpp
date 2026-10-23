@@ -1,4 +1,5 @@
 #include "veriloglib.hpp"
+#include "verilog_checker.hpp"
 #include "verilog_grammar.hpp"
 #include <tao/pegtl.hpp>
 #include <tao/pegtl/contrib/trace.hpp>
@@ -44,6 +45,10 @@ int main(int argc, char** argv) {
     for (const auto& m : nl.modules) {
       std::cout << m.summary() << "\n";
     }
+    // Checking one file (KL11, KL14): every problem, each with its line
+    auto problems = verilog::check(nl);
+    for (const auto& p : problems) std::cerr << verilog::format_problem(p, filename) << "\n";
+    if (!problems.empty()) return 1;
   } catch (const verilog::parse_error& e) {
     std::cerr << "Parse error: " << e.what() << "\n";
     return 2;

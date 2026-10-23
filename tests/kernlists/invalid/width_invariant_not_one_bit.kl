@@ -1,0 +1,6 @@
+// EXPECT checking: an invariant must be one bit wide (KL16).
+kernlist_format 1;
+module m (a);
+  input [3:0] a;
+  invariant wide: a;
+endmodule

@@ -182,20 +182,49 @@ want only the circuit skip `invariant` statements.
 | Layer | Needs | Does | In kernlistlib |
 |---|---|---|---|
 | reading | the file | syntax: the format line, modules, declarations, instances with `variant`, `assign`, `invariant` | yes |
-| checking one file | the file | the format version; names declared before use, and declared once (ports, wires, instances, invariants, modules); KL08's limits in `assign` and connections, and the forms of 2.6 only in `invariant` (KL13); no `variant` on an instance of a module in the same file; the logic groups of 2.4 | yes |
+| checking one file | the file | the format version; names declared before use, and declared once (ports, wires, instances, invariants, modules); KL08's limits in `assign` and connections, and the forms of 2.6 only in `invariant` (KL13); no `variant` on an instance of a module in the same file; widths (2.8, KL16); the logic groups of 2.4 | yes |
 | linking | the file, other modules, the motif library | resolving each instantiated name to a module or a family (unresolved names are an error here); parameters and port names against the family; handshake ends and pairs (2.5); model names in invariants | later; until then, the flow's tools |
 
 Reporting (KL14): a syntax error stops reading, and only it is
 reported. A file that reads is checked completely, and every problem is
 reported, each with its line.
 
-### 2.8 Forms (KL12)
+### 2.8 Widths (KL16)
+
+Checking works out the width of every expression from the declarations,
+and a mismatch is an error, not a warning:
+
+| Form | Width | Error when |
+|---|---|---|
+| a declared name | its range's width; 1 without a range | |
+| `a[i]`, `a[hi:lo]` | 1; `hi - lo + 1` | an index is outside `a`'s range; the select runs against the range's direction (`a[0:3]` of `[3:0]`); `a` has no range |
+| sized constant `n'b...` | `n` | its value does not fit in `n` bits |
+| `{a, b}`, `{n{a, b}}` | the sum; `n` times the sum | |
+| `~a` | `a`'s | |
+| `&a`, `\|a`, `^a` | 1 | |
+| `a & b`, `a \| b`, `a ^ b` | `a`'s | `a` and `b` differ |
+| `a == b`, `a != b` | 1 | `a` and `b` differ |
+| `c ? a : b` | `a`'s | `c` is not 1 bit; `a` and `b` differ |
+| `assign x = e;` | | `x` and `e` differ (a concatenation on the left has the sum of its parts) |
+
+In invariants, model values and unsized numbers are numbers, not bits:
+`+ -` give a number, `< <= > >=` give 1 bit, and `== !=` compare widths
+only when both sides are bits. A number cannot be an operand of `& | ^ ~`,
+a reduction, a concatenation or `?:`. Each side of `->`, and each
+invariant as a whole, must be 1 bit.
+
+Connections are not checked here: the widths of a motif's ports come
+from the motif library, at linking. Problems found earlier in an
+expression (an undeclared name, a form allowed only in invariants) are
+not reported again as width problems.
+
+### 2.9 Forms (KL12)
 
 The `.kl` text is the only form; Python tools read it through
 kernlistlib's bindings. A JSON form may be added later if a tool needs
 one.
 
-### 2.9 Grammar
+### 2.10 Grammar
 
 `kernlist.bnf` gives the grammar of everything above.
 

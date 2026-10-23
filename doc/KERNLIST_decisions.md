@@ -215,3 +215,20 @@ escaped identifier, and the writer escapes them where needed (the
 builder used to store them escaped). Names in code (`verilog`
 namespace, `vparse`) are unchanged, as KL01 left the renaming open.
 
+**KL16. Width mismatches between declared signals are errors.**
+Decided by the owner, from three options: (A) no width checks in
+kernlistlib, left to linking; (B) checking works out widths from the
+declarations, and mismatches in `assign`, operators and selects are
+errors, motif ports unchecked until linking; (C) as B, but warnings, as
+Verilog tools report them. B was chosen: a kernlist is written by a
+tool, so a mismatch is a bug in the front end, better caught at the
+first file than in the floorplanner. The rules (KERNLIST_format.md
+2.8) were tried first in the reference checker (`tests/kernlists/
+reference`): both designs and all valid files pass them, and 14 new
+test files each fail with the intended message. Also decided there,
+within B: a constant that does not fit its width, a select against its
+range's direction, and a select on a name without a range are errors;
+in invariants, model values and unsized numbers are numbers, usable in
+`+ -` and comparisons but not in bitwise logic; each side of `->` and
+each invariant is 1 bit.
+

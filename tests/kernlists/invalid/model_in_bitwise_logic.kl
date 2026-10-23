@@ -1,0 +1,6 @@
+// EXPECT checking: a model value is a number, not bits, and cannot be used in & (KL16).
+kernlist_format 1;
+module m (a);
+  input a;
+  invariant mixed: model(credits.taken) & a;
+endmodule

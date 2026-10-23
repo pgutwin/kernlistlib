@@ -82,6 +82,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tests/test_verilog.cpp` are rewritten in the kernlist form, with tests for parameters,
   `variant`, operators and their precedence, invariants and error positions (53 tests).
 
+- kern-design-examples session: format decision KL16 (width mismatches between declared signals
+  are errors), with the width rules in `doc/KERNLIST_format.md` 2.8, tried first in the reference
+  checker; 14 new test files that must fail on widths.
+- kern-design-examples session: checking one file, `include/verilog_checker.hpp` and
+  `src/verilog_checker.cpp`: `check(netlist)` returns every problem with its line (KL14): format
+  version; modules, declarations, instances, invariants, ports and parameters defined once; ports
+  declared; names declared before use; forms allowed only in invariants (KL13) and `->` only
+  outermost; no `variant` on an instance of a module of the same file; widths (KL16). `vparse`
+  prints the problems and exits with 1 if there are any. The C++ tests check every file of the
+  test set against its expectation and test the messages (55 tests).
+
 ### Removed
 - kern-design-examples session: `tests/test_verilog.cpp.bak`, a leftover.
 - kern-design-examples session: `include/verilog_actions.hpp`, veriloglib's reader actions,

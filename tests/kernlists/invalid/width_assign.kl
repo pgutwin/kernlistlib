@@ -1,0 +1,7 @@
+// EXPECT checking: 4 bits assigned to 2 bits (KL16).
+kernlist_format 1;
+module m (a, y);
+  input [3:0] a;
+  output [1:0] y;
+  assign y = a;
+endmodule
