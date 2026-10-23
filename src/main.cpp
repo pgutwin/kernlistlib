@@ -1,5 +1,6 @@
 #include "veriloglib.hpp"
 #include "verilog_checker.hpp"
+#include "verilog_groups.hpp"
 #include "verilog_grammar.hpp"
 #include <tao/pegtl.hpp>
 #include <tao/pegtl/contrib/trace.hpp>
@@ -49,6 +50,17 @@ int main(int argc, char** argv) {
     auto problems = verilog::check(nl);
     for (const auto& p : problems) std::cerr << verilog::format_problem(p, filename) << "\n";
     if (!problems.empty()) return 1;
+    // The logic groups (KL17)
+    for (const auto& m : nl.modules) {
+      for (const auto& g : verilog::logic_groups(m)) {
+        std::cout << "group " << g.name << " (line " << g.statements.front().line << "): "
+                  << g.operations << (g.operations == 1 ? " operation" : " operations") << "; reads";
+        for (const auto& i : g.inputs) std::cout << " " << i;
+        std::cout << "; drives";
+        for (const auto& o : g.outputs) std::cout << " " << o;
+        std::cout << "\n";
+      }
+    }
   } catch (const verilog::parse_error& e) {
     std::cerr << "Parse error: " << e.what() << "\n";
     return 2;

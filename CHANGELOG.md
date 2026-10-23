@@ -93,6 +93,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prints the problems and exits with 1 if there are any. The C++ tests check every file of the
   test set against its expectation and test the messages (55 tests).
 
+- kern-design-examples session: logic groups, `include/verilog_groups.hpp` and
+  `src/verilog_groups.cpp`: `logic_groups(module)` divides the logic between motifs by the rule
+  of `doc/KERNLIST_format.md` 2.4, with each group's name (KL17), inputs, outputs and number of
+  operations; `vparse` lists them. Format decisions KL17 (a group is named after the signal it
+  drives) and KL18 (selects and concatenations are wiring everywhere, so groups follow the
+  circuit), with 2.4 rewritten; 7 tests (62 tests).
+
 ### Removed
 - kern-design-examples session: `tests/test_verilog.cpp.bak`, a leftover.
 - kern-design-examples session: `include/verilog_actions.hpp`, veriloglib's reader actions,

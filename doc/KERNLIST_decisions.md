@@ -232,3 +232,32 @@ in invariants, model values and unsized numbers are numbers, usable in
 `+ -` and comparisons but not in bitwise logic; each side of `->` and
 each invariant is 1 bit.
 
+**KL17. A logic group is named after the signal it drives.** Decided by
+the owner, from three options: (A) numbered in order of first
+appearance, `logic_0`, `logic_1`, as the flow does today; (B) named
+after the signal it drives, the first in file order when it drives
+several; (C) as B, with a number added only where needed to tell groups
+apart. B was chosen: names stay the same when unrelated logic changes,
+and reports become readable ("group master_number, 2 levels"). A group
+that drives only part of a signal is named with the select as written
+(`response_for[0]`); a group that drives only a motif input directly,
+without a wire, is named `instance.port`.
+
+**KL18. Selects and concatenations are wiring everywhere; groups follow
+the circuit, not the writing.** Decided by the owner, from two options,
+found while implementing the groups of KL07: (A) as the rule was
+written, a concatenation is an operation, so the operators inside one
+are one group, and `assign y = {a & b, c & d};` gives one group where
+two assignments to `y[1]` and `y[0]` give two; (B) names, selects,
+concatenations, replications and constants are wiring everywhere, and a
+group is the operators connected through their operands, followed bit
+by bit through wiring. B was chosen: the groups then depend only on the
+circuit, which is what "one rule, the same in every tool" needs, and
+smaller groups ease KL07's weakness (from kern-design-examples DE11)
+that a group feeding many motifs is placed in one spot. The cost is
+many groups of one gate. On the full port: 14 groups (the flow's
+prototype had 13: it kept the master number as one group, from
+firtool's netlist). Also made exact while implementing, within the
+rule's intent: operations join through wires between statements, not
+only within one statement, since a wire between them is only a name.
+

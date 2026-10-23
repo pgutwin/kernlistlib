@@ -27,6 +27,7 @@ add_library(veriloglib
   src/verilog_writer.cpp
   src/verilog_validator.cpp
   src/verilog_checker.cpp
+  src/verilog_groups.cpp
 )
 target_include_directories(veriloglib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(veriloglib PUBLIC taocpp::pegtl)

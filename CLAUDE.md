@@ -67,7 +67,8 @@ doc/
   verilog_subset.bnf, ...    veriloglib's documents, kept as they were at the fork
 include/  src/               the library and the command-line tool (vparse); the grammar is
                              include/verilog_grammar.hpp, the reader src/veriloglib.cpp,
-                             checking one file src/verilog_checker.cpp
+                             checking one file src/verilog_checker.cpp,
+                             logic groups src/verilog_groups.cpp
 tests/                       unit tests; tests/kernlists/ the kernlist test set (README there)
 python/                      Python bindings (to come)
 ```

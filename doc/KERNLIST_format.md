@@ -119,15 +119,33 @@ The kernlist holds the logic exactly and nothing derived from it. Tools
 that need to place or cost the logic work out its **groups** by one
 rule, the same in every tool (from kern-design-examples DE11):
 
-1. Take every operation in the module's assignments (an operator
-   application, a bit or part select, a concatenation, a constant).
+1. The operations are the operators: `~ & | ^` (also as reductions),
+   `== !=` and `?:`. Names, selects, concatenations, replications and
+   constants are **wiring**, wherever they appear (KL18).
 2. Two operations are in the same group if one is an operand of the
-   other. Constants join no group: each group has its own copy.
-   Operations that are only bit selects and concatenations of one
-   signal form no group: they are wiring.
-3. A group's inputs are the signals entering it (motif outputs, module
-   inputs); its outputs are the signals leaving it (to motif inputs,
-   module outputs).
+   other, directly or through wiring: through selects and
+   concatenations within a statement, and through wires between
+   statements (`assign w = a & b; assign y = w[0] | c;` is one group).
+   Wiring is followed bit by bit, so operations that only share an
+   input, or sit side by side in one concatenation, are separate
+   groups. Constants join no group.
+3. So the groups depend only on the circuit, not on how it is written:
+   `assign y = {a & b, c & d};` and two assignments to `y[1]` and
+   `y[0]` give the same two groups.
+4. A group's inputs are the signals entering it (motif outputs, module
+   inputs); its outputs are the signals it drives (wires or module
+   outputs, or motif inputs driven directly).
+5. A group is named after the signal it drives, the first in file order
+   when it drives several, with the bits as a select when it drives
+   part of a signal (`eligible[3]`); a group that drives a motif input
+   directly is named `instance.port`, with the bits counted from 0 when
+   it drives part of the port (KL17).
+
+Example, from the full port: `assign eligible = {requests_3_deqValid &
+credits_3_available, ...};` gives four groups, `eligible[3]` to
+`eligible[0]`, of one operation each, and `master_number = {grant[3:2]
+!= 2'd0, grant[3] | grant[1]}` gives two, `master_number[1]` and
+`master_number[0]`.
 
 A group's figures (area in two-input gates, logic levels) are not part
 of the format; how they are computed is the flow's concern.
