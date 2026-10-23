@@ -120,6 +120,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   development files from the host's PATH. The container now names its Python
   (`KERNLISTLIB_PYTHON_EXECUTABLE=/usr/bin/python3.11`), CMakeLists.txt uses it unless
   `-DPython_EXECUTABLE` is given, and the configure step reports which Python it uses.
+- kern-design-examples session: in the Python bindings, assigning a plain list to a list attribute
+  (`module.assignments = [...]`) was refused, and `module.port_list` was handed out as a copy, so
+  appending to it changed nothing. Plain lists are now accepted for every list attribute, and
+  `port_list` (and every list of strings) changes in place; 2 Python tests. Found by
+  kern-design-examples' kernlist writer, the bindings' first user.
 
 ## [n/a] 20 November 2025
 

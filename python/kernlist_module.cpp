@@ -30,6 +30,7 @@ PYBIND11_MAKE_OPAQUE(std::vector<InputDeclaration>);
 PYBIND11_MAKE_OPAQUE(std::vector<OutputDeclaration>);
 PYBIND11_MAKE_OPAQUE(std::vector<ContinuousAssign>);
 PYBIND11_MAKE_OPAQUE(std::vector<Invariant>);
+PYBIND11_MAKE_OPAQUE(std::vector<std::string>);
 
 template< typename T >
 static std::string repr_expr(const T& x) { return "<" + write_expr(Expr(x)) + ">"; }
@@ -222,6 +223,18 @@ PYBIND11_MODULE(kernlist, m) {
   py::bind_vector<std::vector<OutputDeclaration>>(m, "OutputDeclarationList");
   py::bind_vector<std::vector<ContinuousAssign>>(m, "AssignList");
   py::bind_vector<std::vector<Invariant>>(m, "InvariantList");
+  py::bind_vector<std::vector<std::string>>(m, "StringList");
+  // so that a plain Python list can be assigned to these attributes: module.assignments = [...]
+  py::implicitly_convertible<py::list, std::vector<Module>>();
+  py::implicitly_convertible<py::list, std::vector<ModuleInstance>>();
+  py::implicitly_convertible<py::list, std::vector<Parameter>>();
+  py::implicitly_convertible<py::list, std::vector<Connection>>();
+  py::implicitly_convertible<py::list, std::vector<NetDeclaration>>();
+  py::implicitly_convertible<py::list, std::vector<InputDeclaration>>();
+  py::implicitly_convertible<py::list, std::vector<OutputDeclaration>>();
+  py::implicitly_convertible<py::list, std::vector<ContinuousAssign>>();
+  py::implicitly_convertible<py::list, std::vector<Invariant>>();
+  py::implicitly_convertible<py::list, std::vector<std::string>>();
 
   // ---- checking and groups
   py::class_<Problem>(m, "Problem")

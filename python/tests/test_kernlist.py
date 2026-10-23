@@ -103,6 +103,23 @@ class Changing(unittest.TestCase):
         self.assertIn("invariant bounded: model(credits.taken) <= 2;", text)
         self.assertEqual(kernlist.check(kernlist.read_string(text)), [])
 
+    def test_assign_plain_lists(self):
+        m = kernlist.Module("top")
+        a = kernlist.ContinuousAssign()
+        a.assignments = [(kernlist.Identifier("y"), kernlist.Identifier("x"))]
+        m.assignments = [a]
+        m.module_instances = [kernlist.ModuleInstance("sink", "s")]
+        m.module_instances[0].parameters = [kernlist.Parameter("W", 1)]
+        self.assertEqual(len(m.assignments), 1)
+        self.assertEqual(m.module_instances[0].parameters[0].name, "W")
+
+    def test_port_list_in_place(self):
+        m = kernlist.Module("top")
+        m.port_list.append("a")
+        m.port_list.append("b")
+        self.assertEqual(list(m.port_list), ["a", "b"])
+        self.assertEqual(m.port_list, ["a", "b"])
+
 
 if __name__ == "__main__":
     unittest.main()
